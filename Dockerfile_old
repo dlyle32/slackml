@@ -1,0 +1,52 @@
+FROM buildpack-deps:stretch
+
+LABEL maintainer="David Lyle <lyledavidt@gmail.com>"
+
+ENV PYTHON_VERSION=3.8
+
+# Conda, fragments from: https://github.com/ContinuumIO/docker-images/blob/master/miniconda3/Dockerfile
+# Explicit install of Python 3.7 with:
+# /opt/conda/bin/conda install -y python=$PYTHON_VERSION && \
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+ENV PATH /opt/conda/bin:$PATH
+ENV CONDA_DIR = /opt/conda
+
+RUN apt-get update --fix-missing && \
+    apt-get install -y wget bzip2 ca-certificates curl git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p /opt/conda && \
+    rm ~/miniconda.sh && \
+    /opt/conda/bin/conda update -n base -c defaults conda && \
+    /opt/conda/bin/conda install -y python=$PYTHON_VERSION && \
+    /opt/conda/bin/conda clean -tipsy && \
+    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "conda activate base" >> ~/.bashrc
+
+# End Conda
+
+# Install Tini
+# RUN conda install --quiet --yes 'tini=0.18.0' && \
+#     conda list tini | grep tini | tr -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned && \
+#     conda clean --all -f -y && \
+#     fix-permissions $CONDA_DIR && \
+#     fix-permissions /home/$NB_USER
+
+# Tini: https://github.com/krallin/tini
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+ENTRYPOINT ["/tini", "--"]
+# End Tini
+
+WORKDIR /slackai
+COPY slackai.yaml .
+RUN conda env create --file slackai.yaml
+RUN conda activate slackai
+
+COPY . .
+
+CMD ["python", "src/NN.py"]

@@ -1,0 +1,8 @@
+name: slack_ai
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - pandas
+
