@@ -3,6 +3,7 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import argparse
+from scipy.sparse import csc_matrix as csc
 
 # def model(X, Y, layer_dims, optimizer, learning_rate = 0.0007, mini_batch_size = 64, beta = 0.9,
 #           beta1 = 0.9, beta2 = 0.999,  epsilon = 1e-8, num_epochs = 10000, print_cost = True):
@@ -11,13 +12,24 @@ print("BEGINNING")
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--datadir", default="/slackdata/")
+    parser.add_argument("--features", default="/slackdata/features/")
     parser.add_argument("--xtrain", default="/slackdata/features/trainx.csv")
     parser.add_argument("--ytrain", default="/slackdata/features/trainy.csv")
     parser.add_argument("--xtest", default="/slackdata/features/testx.csv")
     parser.add_argument("--ytest", default="/slackdata/features/testy.csv")
     args = parser.parse_args()
     return args
+
+def initialize_adam(layer_dims):
+    params = []
+    for i in range(1, len(layer_dims)):
+        layer_params =  {}
+        layer_params["VdW"] = np.zeros((layer_dims[i], layer_dims[i-1]))
+        layer_params["Vdb"] = np.zeros((layer_dims[i], 1))
+        layer_params["SdW"] = np.zeros((layer_dims[i], layer_dims[i-1]))
+        layer_params["Sdb"] = np.zeros((layer_dims[i], 1))
+        params.append(layer_params)
+    return params
 
 def initialize_params(layer_dims):
     params = []
@@ -52,12 +64,12 @@ def sigmoid(x):
     return 1/(1+np.exp(-x))
 
 def relu(x):
-    s = np.maximum(0, x)
+    s = np.maximum(x, 0)
     return s
 
 def softmax(x):
     x = np.exp(x)
-    x = x/np.sum(x, axis=0, keepdims=True)
+    x /= np.sum(x, axis=0, keepdims=True)
     return x
 
 def forward_prop(X, params):
@@ -103,9 +115,26 @@ def back_prop(X, Y, caches):
 def update_parameters(params, grads, learning_rate):
     L = len(params)
     for l in range(0,L):
-        params[l]["W"] = params[l]["W"] - learning_rate * grads[l]["dW"]
-        params[l]["b"] = params[l]["b"] - learning_rate * grads[l]["db"]
+        params[l]["W"] -= learning_rate * grads[l]["dW"]
+        params[l]["b"] -= learning_rate * grads[l]["db"]
     return params
+
+def update_parameters_with_adam(params, adam_params, grads, t, learning_rate, beta1=0.9, beta2=0.999, epsilon=1e-8):
+    L = len(params)
+    for l in range(0,L):
+        adam_params[l]["VdW"] = beta1 * adam_params[l]["VdW"] + (1-beta1) * grads[l]["dW"]
+        adam_params[l]["Vdb"] = beta1 * adam_params[l]["Vdb"] + (1-beta1) * grads[l]["db"]
+        vw_corrected = adam_params[l]["VdW"] / (1-beta1 ** t)
+        vb_corrected = adam_params[l]["Vdb"] / (1-beta1 ** t)
+
+        adam_params[l]["SdW"] = beta2 * adam_params[l]["SdW"] + (1-beta2) * (grads[l]["dW"] ** 2)
+        adam_params[l]["Sb"] = beta2 * adam_params[l]["Sdb"] + (1-beta2) * (grads[l]["db"] ** 2)
+        sw_corrected = adam_params[l]["SdW"] / (1-beta2 ** t)
+        sb_corrected = adam_params[l]["Sdb"] / (1-beta2 ** t)
+
+        params[l]["W"] -= learning_rate * vw_corrected / np.sqrt(sw_corrected + epsilon)
+        params[l]["b"] -= learning_rate * vb_corrected / np.sqrt(sb_corrected + epsilon)
+    return params, adam_params
 
 def predict(X, Y, params):
     m = X.shape[1]
@@ -136,8 +165,10 @@ def model(X, Y, layer_dims, learning_rate = 0.0007, mini_batch_size = 64, num_ep
     print("HEEERE")
     m = X.shape[1]
     params = initialize_params(layer_dims)
+    adam_params = initialize_adam(layer_dims)
     seed = 10
     costs = []
+    t = 1
     for i in range(0, num_epochs):
         seed += 1
         minibatches = random_mini_batches(X, Y, mini_batch_size, seed)
@@ -148,7 +179,9 @@ def model(X, Y, layer_dims, learning_rate = 0.0007, mini_batch_size = 64, num_ep
             batchX, batchY = batch
             output, caches = forward_prop(batchX, params)
             grads = back_prop(batchX, batchY, caches)
-            params = update_parameters(params, grads, learning_rate)
+            # params = update_parameters(params, grads, learning_rate)
+            params, adam_params = update_parameters_with_adam(params, adam_params, grads, t, learning_rate)
+            t += 1
             cost = compute_cost(output, batchY)
             cost_total += cost
         cost_avg = cost_total / m
@@ -167,6 +200,11 @@ if __name__=="__main__":
     # xtest = "/Users/davidlyle/slack_ml/data/features/testx.csv"
     # ytest = "/Users/davidlyle/slack_ml/data/features/testy.csv"
     args = parse_args()
+    if args.features != "/slackdata/features/":
+        args.xtrain = args.features + "trainx.csv"
+        args.ytrain = args.features + "trainy.csv"
+        args.xtest = args.features + "testx.csv"
+        args.ytest = args.features + "testy.csv"
     X = pd.read_csv(args.xtrain, header=0, index_col=0)
     X = X.T.to_numpy()
     Y = pd.read_csv(args.ytrain, header=0, index_col=0)

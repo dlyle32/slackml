@@ -1,0 +1,10 @@
+#cloud-config
+
+bootcmd:
+- echo "starting" >  /home/lyledavidt_gmail_com/output.txt
+- fsck.ext4 -tvy /dev/sdb | tee -a /home/lyledavidt_gmail_com/output.txt
+- echo ".....1" >>  /home/lyledavidt_gmail_com/output.txt
+- mkdir -p /mnt/disks/slackdata | tee -a /home/lyledavidt_gmail_com/output.txt
+- echo ".....2" >>  /home/lyledavidt_gmail_com/output.txt
+- mount -t ext4 -O ... /dev/sdb /mnt/disks/slackdata | tee -a /home/lyledavidt_gmail_com/output.txt
+- echo "DONE" >>  /home/lyledavidt_gmail_com/output.txt
