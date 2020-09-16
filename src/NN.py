@@ -21,6 +21,18 @@ def normalize_input(X,Xtest):
     Xtest /= sigsquared
     return X, Xtest
 
+def normalize_input(X,Xtest):
+    m = X.shape[1]
+    mu = np.sum(X, axis = 1, keepdims=True) / m
+    X -= mu
+    sigsquared = np.sum(X**2, axis=1, keepdims=True) / m
+    offset = np.int64(sigsquared == 0)
+    X /= (sigsquared + offset)
+    Xtest -= mu
+    Xtest /= sigsquared
+    return X, Xtest
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--features", default="/slackdata/features/")
@@ -46,7 +58,8 @@ def initialize_params(layer_dims):
     params = []
     np.random.seed(5)
     for i in range(1,len(layer_dims)):
-        # Xavier initialization?
+        # Xavier initialization? no xavier is for tanh, uses 1/n[l-1]
+        # This is He initialization (2/..)
         layer_params =  {}
         layer_params["W"] = np.random.randn(layer_dims[i], layer_dims[i-1]) * np.sqrt(1 / layer_dims[i-1])
         layer_params["b"] = np.zeros((layer_dims[i], 1))
@@ -117,7 +130,7 @@ def back_prop(X, Y, caches):
     grads[L-1] = {"dZ": dZL, "dW": dWL, "db": dbL}
     for l in range(L-2,-1,-1):
         dAl = np.dot(caches[l+1]["W"].T, caches[l+1]["Z"])
-        dZl = np.multiply(dAl, np.int64(caches[l]["A"] > 0))
+        dZl = np.multiply(dAl, np.int64(caches[l]["A"] > 0)) # relu grad
         if l == 0:
             dWl = 1./m * np.dot(dZl, X.T)
         else:
