@@ -2,10 +2,8 @@ name: slack_ai
 channels:
   - defaults
 dependencies:
+  - nomkl
   - matplotlib
   - numpy
   - pandas
-  - scipy
-  - nltk
-  - scikit-learn 
 
