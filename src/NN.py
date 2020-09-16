@@ -3,12 +3,25 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import argparse
+import sys
 from scipy.sparse import csc_matrix as csc
 
 # def model(X, Y, layer_dims, optimizer, learning_rate = 0.0007, mini_batch_size = 64, beta = 0.9,
 #           beta1 = 0.9, beta2 = 0.999,  epsilon = 1e-8, num_epochs = 10000, print_cost = True):
 
 print("BEGINNING")
+
+def normalize_input(X,Xtest):
+    m = X.shape[1]
+    mu = np.sum(X, axis = 1, keepdims=True) / m
+    X -= mu
+    sigsquared = np.sum(X**2, axis=1, keepdims=True) / m
+    offset = np.int64(sigsquared == 0)
+    X /= (sigsquared + offset)
+    Xtest -= mu
+    Xtest /= sigsquared
+    return X, Xtest
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,7 +48,8 @@ def initialize_params(layer_dims):
     params = []
     np.random.seed(3)
     for i in range(1,len(layer_dims)):
-        # Xavier initialization?
+        # Xavier initialization? no xavier is for tanh, uses 1/n[l-1]
+        # This is He initialization (2/..)
         layer_params =  {}
         layer_params["W"] = np.random.randn(layer_dims[i], layer_dims[i-1]) * np.sqrt(2 / layer_dims[i-1])
         layer_params["b"] = np.zeros((layer_dims[i], 1))
@@ -90,7 +104,7 @@ def forward_prop(X, params):
 
 def compute_cost(output, Y):
     m = Y.shape[1]
-    cost = -1/m * np.sum(np.sum(Y * np.log(output), axis = 0, keepdims=True), axis = 1, keepdims=True).flatten()
+    cost = -1./m * np.sum(np.sum(Y * np.log(output), axis = 0, keepdims=True), axis = 1, keepdims=True).flatten()
     return cost
 
 def back_prop(X, Y, caches):
@@ -103,7 +117,7 @@ def back_prop(X, Y, caches):
     grads[L-1] = {"dZ": dZL, "dW": dWL, "db": dbL}
     for l in range(L-2,-1,-1):
         dAl = np.dot(caches[l+1]["W"].T, caches[l+1]["Z"])
-        dZl = np.multiply(dAl, np.int64(caches[l]["A"] > 0))
+        dZl = np.multiply(dAl, np.int64(caches[l]["A"] > 0)) # relu grad
         if l == 0:
             dWl = 1./m * np.dot(dZl, X.T)
         else:
@@ -209,13 +223,16 @@ if __name__=="__main__":
     X = X.T.to_numpy()
     Y = pd.read_csv(args.ytrain, header=0, index_col=0)
     Y= Y.T.to_numpy()
-    layer_dims = [X.shape[0], 5, 4, Y.shape[0]]
-    params = model(X,Y,layer_dims, learning_rate=0.001, num_epochs=1)
-
     Xtest = pd.read_csv(args.xtest, header=0, index_col=0)
     Xtest = Xtest.T.to_numpy()
     Ytest = pd.read_csv(args.ytest, header=0, index_col=0)
     Ytest = Ytest.T.to_numpy()
+
+    X, Xtest = normalize_input(X, Xtest)
+
+    layer_dims = [X.shape[0], 5, 4, Y.shape[0]]
+    params = model(X,Y,layer_dims, learning_rate=0.001, num_epochs=1)
+
     predict(X, Y, params)
     predict(Xtest, Ytest, params)
 
