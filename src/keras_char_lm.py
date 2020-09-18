@@ -7,6 +7,7 @@ from keras.optimizers import Adam
 from keras.utils.data_utils import get_file
 import numpy as np
 import random
+import math
 import sys
 import io
 import os
@@ -40,8 +41,14 @@ def on_epoch_end(epoch, _):
     print("COMPLETED EPOCH %d" % epoch)
 
 def main(datadir):
+    mini_batch_size = 64
+    n_a = 32
+    num_epochs = 1
     train, test = load_datasets(datadir)
-    print(len(train))
+    m = len(train)
+    numbatches = math.floor(m / mini_batch_size)
+    if m % mini_batch_size != 0:
+        numbatches += 1
     chars = set()
     maxlen = max([len(msg) for msg in train]) + 1
     #maxlen = reduce(lambda a,b: len(a) if len(a) > b else b, train) + 1 # Adding one for appended <EOM>
@@ -50,17 +57,20 @@ def main(datadir):
     chars = sorted(list(chars))
     chars.append("<EOM>")
     char_to_ix = {c: i for i, c in enumerate(chars)}
-    X = np.zeros((len(train), maxlen, len(chars)))
-    Y = np.zeros((len(train), maxlen, len(chars)))
-    for i, msg in enumerate(train):
-        for t,c in enumerate(msg):
-            X[i, t+1, char_to_ix[c]] = 1
-            Y[i, t, char_to_ix[c]] = 1
-        Y[i, -1, char_to_ix["<EOM>"]] = 1
 
-    print_callback = LambdaCallback(on_epoch_end=on_epoch_end)
-    model = create_model(chars, 128, maxlen, 0.01)
-    model.fit(X,Y, batch_size=128, epochs=1, callbacks=[print_callback])
+    model = create_model(chars, 32, maxlen, 0.01)
+    for e in range(0,num_epochs):
+        random.shuffle(train)
+        for b in range(0,numbatches):
+            X = np.zeros((mini_batch_size, maxlen, len(chars)))
+            Y = np.zeros((mini_batch_size, maxlen, len(chars)))
+            for i, msg in enumerate(train[b*mini_batch_size:min(m, (b+1)*mini_batch_size)]):
+                for t,c in enumerate(msg):
+                    X[i, t+1, char_to_ix[c]] = 1
+                    Y[i, t, char_to_ix[c]] = 1
+                Y[i, -1, char_to_ix["<EOM>"]] = 1
+            model.train_on_batch(X,Y)
+            print("FINISHED BATCH %d on slice [%d:%d]" % (b, b*mini_batch_size,min(m, (b+1)*mini_batch_size)))
 
 if __name__=="__main__":
     main("data/user_msgs/U0AR782AV/")
