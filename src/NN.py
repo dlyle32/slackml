@@ -3,13 +3,23 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import argparse
-import sys
-from scipy.sparse import csc_matrix as csc
 
 # def model(X, Y, layer_dims, optimizer, learning_rate = 0.0007, mini_batch_size = 64, beta = 0.9,
 #           beta1 = 0.9, beta2 = 0.999,  epsilon = 1e-8, num_epochs = 10000, print_cost = True):
 
-print("BEGINNING")
+print("BEGINNING", flush=True)
+
+print_debug = False
+def normalize_input(X,Xtest):
+    m = X.shape[1]
+    mu = np.sum(X, axis = 1, keepdims=True) / m
+    X -= mu
+    sigsquared = np.sum(X**2, axis=1, keepdims=True) / m
+    offset = np.int64(sigsquared == 0)
+    X /= (sigsquared + offset)
+    Xtest -= mu
+    Xtest /= sigsquared
+    return X, Xtest
 
 def normalize_input(X,Xtest):
     m = X.shape[1]
@@ -26,10 +36,10 @@ def normalize_input(X,Xtest):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--features", default="/slackdata/features/")
-    parser.add_argument("--xtrain", default="/slackdata/features/trainx.csv")
-    parser.add_argument("--ytrain", default="/slackdata/features/trainy.csv")
-    parser.add_argument("--xtest", default="/slackdata/features/testx.csv")
-    parser.add_argument("--ytest", default="/slackdata/features/testy.csv")
+    parser.add_argument("--xtrain", default="/slackdata/features/trainx_0.csv")
+    parser.add_argument("--ytrain", default="/slackdata/features/trainy_0.csv")
+    parser.add_argument("--xtest", default="/slackdata/features/testx_0.csv")
+    parser.add_argument("--ytest", default="/slackdata/features/testy_0.csv")
     args = parser.parse_args()
     return args
 
@@ -46,12 +56,12 @@ def initialize_adam(layer_dims):
 
 def initialize_params(layer_dims):
     params = []
-    np.random.seed(3)
+    np.random.seed(5)
     for i in range(1,len(layer_dims)):
         # Xavier initialization? no xavier is for tanh, uses 1/n[l-1]
         # This is He initialization (2/..)
         layer_params =  {}
-        layer_params["W"] = np.random.randn(layer_dims[i], layer_dims[i-1]) * np.sqrt(2 / layer_dims[i-1])
+        layer_params["W"] = np.random.randn(layer_dims[i], layer_dims[i-1]) * np.sqrt(1 / layer_dims[i-1])
         layer_params["b"] = np.zeros((layer_dims[i], 1))
 
         assert layer_params['W'].shape[0] == layer_dims[i], layer_dims[i - 1]
@@ -82,6 +92,9 @@ def relu(x):
     return s
 
 def softmax(x):
+    if print_debug:
+        print(np.amin(x))
+        print(np.amax(x))
     x = np.exp(x)
     x /= np.sum(x, axis=0, keepdims=True)
     return x
@@ -159,7 +172,7 @@ def predict(X, Y, params):
 
     preds = np.int64(output == np.max(output, axis = 0))
     accuracy = 100/m * np.sum(np.multiply.reduce(preds == np.int64(Y), axis=0))
-    print("Accuracy: " + str(accuracy))
+    print("Accuracy: " + str(accuracy), flush=True)
 
 def plotcosts(costs, learning_rate):
     # plot the cost
@@ -176,13 +189,16 @@ def model(X, Y, layer_dims, learning_rate = 0.0007, mini_batch_size = 64, num_ep
     # Optimize
     # Plot cost/metrics
     # Evaluate
-    print("HEEERE")
+    print("HEEERE", flush=True)
     m = X.shape[1]
     params = initialize_params(layer_dims)
     adam_params = initialize_adam(layer_dims)
     seed = 10
     costs = []
     t = 1
+    if print_debug:
+        print(np.amin(X))
+        print(np.amax(X))
     for i in range(0, num_epochs):
         seed += 1
         minibatches = random_mini_batches(X, Y, mini_batch_size, seed)
@@ -190,6 +206,13 @@ def model(X, Y, layer_dims, learning_rate = 0.0007, mini_batch_size = 64, num_ep
         batchnumber = 0
         for batch in minibatches:
             batchnumber+=1
+            if print_debug:
+                print("======================BATCH NUMBER: " + str(batchnumber))
+                print(np.amax(params[0]["W"]))
+                print(np.amax(params[1]["W"]))
+                print(np.amax(params[2]["W"]))
+                print(np.amax(params[3]["W"]))
+                print(np.amax(params[4]["W"]))
             batchX, batchY = batch
             output, caches = forward_prop(batchX, params)
             grads = back_prop(batchX, batchY, caches)
@@ -200,21 +223,22 @@ def model(X, Y, layer_dims, learning_rate = 0.0007, mini_batch_size = 64, num_ep
             cost_total += cost
         cost_avg = cost_total / m
         if i % 25 == 0:
-            print("Cost after " + str(i) + " iterations: " + str(cost_avg))
+            print("Cost after " + str(i) + " iterations: " + str(cost_avg), flush = True)
             costs.append(cost_avg)
 
     # plotcosts(costs, learning_rate)
 
+    print(costs)
     return params
 
 if __name__=="__main__":
-    print("HERE")
+    print("HERE", flush=True)
     # xtrain = "/Users/davidlyle/slack_ml/data/features/trainx.csv"
     # ytrain = "/Users/davidlyle/slack_ml/data/features/trainy.csv"
     # xtest = "/Users/davidlyle/slack_ml/data/features/testx.csv"
     # ytest = "/Users/davidlyle/slack_ml/data/features/testy.csv"
     args = parse_args()
-    if args.features != "/slackdata/features/":
+    if False and args.features != "/slackdata/features/":
         args.xtrain = args.features + "trainx.csv"
         args.ytrain = args.features + "trainy.csv"
         args.xtest = args.features + "testx.csv"
@@ -228,10 +252,10 @@ if __name__=="__main__":
     Ytest = pd.read_csv(args.ytest, header=0, index_col=0)
     Ytest = Ytest.T.to_numpy()
 
-    X, Xtest = normalize_input(X, Xtest)
+    #X,Xtest = normalize_input(X,Xtest)
 
-    layer_dims = [X.shape[0], 5, 4, Y.shape[0]]
-    params = model(X,Y,layer_dims, learning_rate=0.001, num_epochs=1)
+    layer_dims = [X.shape[0], 1000, 500, 250, 100, 50, Y.shape[0]]
+    params = model(X,Y,layer_dims, learning_rate=0.001, num_epochs=200)
 
     predict(X, Y, params)
     predict(Xtest, Ytest, params)
