@@ -68,13 +68,13 @@ def oh_to_char(chars, oh):
     return "0" if len(char) == 0 else char[0]
 
 def main(datadir):
-    mini_batch_size = 128
-    n_a = 512
-    num_epochs = 1
+    mini_batch_size = 512
+    n_a = 128
+    num_epochs = 60
     train, test = load_datasets(datadir)
     m = len(train)
     chars = set()
-    maxlen = 60
+    maxlen = 100
     #for msg in train:
     #    chars = chars.union(set(msg))
     #chars = sorted(list(chars))
@@ -83,7 +83,6 @@ def main(datadir):
 
     model = create_model(chars, n_a, maxlen, 0.01)
     metrics = []
-    train = train[:10]
     for e in range(0,num_epochs):
         random.shuffle(train)
         data = "".join(train)
