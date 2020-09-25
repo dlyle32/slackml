@@ -6,7 +6,8 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras.models import load_model
 import numpy as np
 import random
 import math
@@ -57,56 +58,63 @@ def get_ix_from_char(char_to_ix, chars, c):
         return char_to_ix["<UNK>"]
 
 def on_epoch_end(epoch, model, chars, char_to_ix, metrics):
-    print("COMPLETED EPOCH %d" % epoch)
-    for i,lbl in enumerate(model.metrics_names):
-        print(lbl + ": " + str(metrics[i]))
+    #print("COMPLETED EPOCH %d" % epoch)
+    #for lbl in metrics.keys():
+    #    print(lbl + ": " + str(metrics[lbl]))
     sample_msg = sample(model, chars, char_to_ix)
-    print(sample_msg)
+    print("\n" + sample_msg)
 
 def oh_to_char(chars, oh):
     char = [chars[i] for i,c in enumerate(oh) if c == 1]
     return "0" if len(char) == 0 else char[0]
 
-def main(datadir):
+def main(datadir, args):
+    model_path = "/slackml/mymodel3.keras"
     mini_batch_size = 512
-    n_a = 128
+    n_a = 256
     num_epochs = 60
     train, test = load_datasets(datadir)
     m = len(train)
     chars = set()
-    maxlen = 100
+    maxlen = 25
     #for msg in train:
     #    chars = chars.union(set(msg))
     #chars = sorted(list(chars))
     chars = ['\t', '\n', ' ', '!', '"', '#', '$', '%', '&', "'", '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~', '<UNK>']
     char_to_ix = {c: i for i, c in enumerate(chars)}
 
-    model = create_model(chars, n_a, maxlen, 0.01)
+    if args.loadmodel:
+        print("LOADING FROM FILE")
+    else:
+        print("CREATING MODEL")
+    model = create_model(chars, n_a, maxlen, 0.01) if not args.loadmodel else load_model(model_path)
     metrics = []
-    for e in range(0,num_epochs):
-        random.shuffle(train)
-        data = "".join(train)
-        nummsgs = math.floor(len(data) / maxlen)
-        if len(data) % maxlen != 0:
-            nummsgs += 1
-        numbatches = math.floor(nummsgs / mini_batch_size)
-        if nummsgs % mini_batch_size != 0:
-            numbatches += 1
-        for b in range(numbatches):
-            X = np.zeros((mini_batch_size, maxlen, len(chars)))
-            Y = np.zeros((mini_batch_size, maxlen, len(chars)))
-            msgs = 0
-            for i in range(b* maxlen * mini_batch_size,min(len(data), (b+1)*maxlen *mini_batch_size), maxlen):
-                last_ix = min(i+maxlen-1, len(data)-1)
-                for t, c in enumerate(data[i:last_ix]):
-                    char_index = get_ix_from_char(char_to_ix, chars, c)
-                    X[msgs, t + 1, char_index] = 1
-                    Y[msgs, t, char_index] = 1
-                Y[msgs, t, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
-                msgs += 1
-            metrics = model.train_on_batch(X,Y)
-        model.save("/slackml/mymodel5.keras")
-        on_epoch_end(e, model, chars,char_to_ix, metrics)
+    data = "".join(train)
+    nummsgs = math.floor(len(data) / maxlen)
+    if len(data) % maxlen != 0:
+        nummsgs += 1
+    X = np.zeros((nummsgs, maxlen, len(chars)))
+    Y = np.zeros((nummsgs, maxlen, len(chars)))
+    msgs = 0
+    for i in range(0,len(data), maxlen):
+        last_ix = min(i+maxlen-1, len(data)-1)
+        for t,c in enumerate(data[i:last_ix]):
+            char_index = get_ix_from_char(char_to_ix, chars, c)
+            X[msgs, t + 1, char_index] = 1
+            Y[msgs, t, char_index] = 1
+        Y[msgs, t, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
+        msgs+=1
+    epoch_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(epoch, model, chars, char_to_ix, logs))
+    model.fit(X,Y,
+              batch_size=mini_batch_size,
+              epochs=num_epochs,
+              callbacks=[epoch_callback])
+
+def parse_args():
+    parser= argparse.ArgumentParser()
+    parser.add_argument("--loadmodel", action="store_true", default=False)
+    return parser.parse_args()
 
 if __name__=="__main__":
-    main("/slackdata/")
+    args = parse_args()
+    main("/slackdata/", args)
