@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.callbacks import LambdaCallback
+from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
@@ -23,8 +23,8 @@ def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
     model = Sequential([
         LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-        LSTM(n_a, return_sequences=True),
-        TimeDistributed(Dense(vocab_size, activation="softmax"))
+        LSTM(n_a),
+        Dense(vocab_size, activation="softmax")
     ])
     opt = Adam(learning_rate=lr, clipvalue=5)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
@@ -70,7 +70,8 @@ def oh_to_char(chars, oh):
     char = [chars[i] for i,c in enumerate(oh) if c == 1]
     return "0" if len(char) == 0 else char[0]
 
-def main(datadir, args):
+def main(args):
+    datadir = args.datadir
     model_path = "/slackml/mymodel3.keras"
     mini_batch_size = 512
     n_a = 128
@@ -78,7 +79,7 @@ def main(datadir, args):
     train, test = load_datasets(datadir)
     m = len(train)
     chars = set()
-    maxlen = 25
+    maxlen = 10
     #for msg in train:
     #    chars = chars.union(set(msg))
     #chars = sorted(list(chars))
@@ -93,20 +94,19 @@ def main(datadir, args):
     model = create_model(chars, n_a, maxlen, 0.01) if not args.loadmodel else load_model(model_path)
     metrics = []
     data = "".join(train)
+    data = data[:100]
     nummsgs = math.floor(len(data) / maxlen)
     if len(data) % maxlen != 0:
         nummsgs += 1
     X = np.zeros((nummsgs, maxlen, len(chars)))
-    Y = np.zeros((nummsgs, maxlen, len(chars)))
+    Y = np.zeros((nummsgs, 1, len(chars)))
     msgs = 0
     for i in range(0,len(data), maxlen):
-        last_ix = min(i+maxlen, len(data)-1)
+        last_ix = min(i+maxlen-1, len(data)-1)
         for t,c in enumerate(data[i:last_ix]):
             char_index = get_ix_from_char(char_to_ix, chars, c)
-            if t < maxlen-1:
-                X[msgs, t + 1, char_index] = 1
-            Y[msgs, t, char_index] = 1
-        Y[msgs, maxlen-1, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
+            X[msgs, t, char_index] = 1
+        Y[msgs, 0, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
     epoch_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(epoch, model, chars, char_to_ix, logs, model_path))
     model.fit(X,Y,
@@ -117,8 +117,9 @@ def main(datadir, args):
 def parse_args():
     parser= argparse.ArgumentParser()
     parser.add_argument("--loadmodel", action="store_true", default=False)
+    parser.add_argument("--datadir", default="/slackdata/")
     return parser.parse_args()
 
 if __name__=="__main__":
     args = parse_args()
-    main("/slackdata/", args)
+    main(args)
