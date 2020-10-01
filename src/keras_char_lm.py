@@ -34,11 +34,14 @@ def create_model(chars, n_a, maxlen, lr):
 def sample(model, chars, char_to_ix, temperature=1.0):
     maxlen=model.layers[0].input_shape[1]
     vocab_size =model.layers[-1].output_shape[-1]
-    output = ""
-    x = np.zeros((1, maxlen, vocab_size))
     char_index = -1
     i = 0
-    while char_index != char_to_ix['\n'] and i < maxlen:
+    input = "you know what the crowd says"
+    input = input[:maxlen]
+    output = input
+    while char_index != char_to_ix['\n']:
+        x = np.zeros((1, maxlen, vocab_size))
+        x[0] = [char_to_oh(char_to_ix[c]) for c in input]
         preds = model.predict(x, verbose=0)[0][i]
         #preds = np.asarray(preds).astype('float64')
         #preds = np.log(preds) / temperature
@@ -47,8 +50,9 @@ def sample(model, chars, char_to_ix, temperature=1.0):
         char_index = np.random.choice(range(vocab_size), p = preds.ravel())
         #probas = np.random.multinomial(1, preds, 1)
         #char_index = np.argmax(probas)
-        x[0,i,char_index] = 1
         output += chars[char_index]
+        input += chars[char_index]
+        input = input[1:]
         i+=1
     return output
 
@@ -69,6 +73,11 @@ def on_epoch_end(epoch, model, chars, char_to_ix, metrics, model_path):
 def oh_to_char(chars, oh):
     char = [chars[i] for i,c in enumerate(oh) if c == 1]
     return "0" if len(char) == 0 else char[0]
+
+def char_to_oh(index, vocab_size):
+    x = np.zeros((vocab_size))
+    x[index] = 1
+    return x
 
 def main(args):
     datadir = args.datadir
