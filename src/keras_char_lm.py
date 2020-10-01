@@ -23,8 +23,8 @@ def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
     model = Sequential([
         LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-        LSTM(n_a, input_shape=(maxlen, n_a), return_sequences=True),
-        Dense(vocab_size, activation="softmax")
+        LSTM(n_a, return_sequences=True),
+        TimeDistributed(Dense(vocab_size, activation="softmax"))
     ])
     opt = Adam(learning_rate=lr, clipvalue=5)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
