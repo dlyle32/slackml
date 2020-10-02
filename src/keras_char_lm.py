@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint
+from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
@@ -11,6 +11,10 @@ from tensorflow.keras.models import load_model
 import numpy as np
 import random
 import math
+import requests
+import datetime
+import time
+import glob
 import sys
 import io
 import os
@@ -60,11 +64,10 @@ def get_ix_from_char(char_to_ix, chars, c):
     else:
         return char_to_ix["*"]
 
-def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics, model_path):
+def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
     #print("COMPLETED EPOCH %d" % epoch)
     #for lbl in metrics.keys():
     #    print(lbl + ": " + str(metrics[lbl]))
-    model.save(model_path)
     sample_msg = sample(data, model, chars, char_to_ix)
     print("\n" + sample_msg[:40] + "->" + sample_msg[40:])
 
@@ -77,17 +80,55 @@ def char_to_oh(index, vocab_size):
     x[index] = 1
     return x
 
+def load_checkpoint_model(checkpoint_path, checkpoint_names):
+    list_of_checkpoint_files = glob.glob(os.path.join(checkpoint_path, '*'))
+    checkpoint_epoch_number = max([int(file.split(".")[1]) for file in list_of_checkpoint_files])
+    checkpoint_epoch_path = os.path.join(checkpoint_path,
+                                         checkpoint_names.format(epoch=checkpoint_epoch_number))
+    resume_model = load_model(checkpoint_epoch_path)
+    return resume_model, checkpoint_epoch_number
+
+def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, data, model):
+    today_date = datetime.datetime.today().strftime('%Y-%m-%d')
+    if not os.path.isdir(checkpoint_path):
+        os.makedirs(checkpoint_path)
+    filepath = os.path.join(checkpoint_path, checkpoint_names)
+    checkpoint_callback = ModelCheckpoint(filepath=filepath,
+                                          save_weights_only=False,
+                                          monitor='val_loss')
+    # Loss history callback
+    epoch_results_callback = CSVLogger(os.path.join(volume_mount_dir, 'training_log_{}.csv'.format(today_date)),
+                                       append=True)
+    sample_callbak = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
+
+    class SpotTermination(keras.callbacks.Callback):
+        def on_batch_begin(self, batch, logs={}):
+            try:
+                status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
+                if status_code != 404:
+                    time.sleep(150)
+            except:
+                print("Request unsuccessful")
+
+    spot_termination_callback = SpotTermination()
+
+    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback]
+    return callbacks
+
 def main(args):
-    datadir = args.datadir
-    model_path = "/slackml/mymodel3.keras"
-    mini_batch_size = 512
-    n_a = 256
-    num_epochs = 60
+    volumedir = args.volumedir
+    datadir = os.path.join(volumedir, args.datadir)
+    checkpointdir = os.path.join(volumedir, args.checkpointdir)
+    checkpointnames = args.checkpointnames
+    mini_batch_size = args.minibatchsize
+    learning_rate = args.learningrate
+    n_a = args.hiddensize
+    num_epochs = args.numepochs
     train, test = load_datasets(datadir)
     m = len(train)
     chars = set()
-    step = 10
-    maxlen = 40
+    step = args.step
+    maxlen = args.seqlength
     #for msg in train:
     #    chars = chars.union(set(msg))
     #chars = sorted(list(chars))
@@ -95,11 +136,11 @@ def main(args):
     chars = ['\n', ' ', '!', '"', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '?', '@', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '~', '*']
     char_to_ix = {c: i for i, c in enumerate(chars)}
 
-    if args.loadmodel:
-        print("LOADING FROM FILE")
+    if os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
+        model, epoch_number = load_checkpoint_model(checkpointdir, checkpointnames)
     else:
-        print("CREATING MODEL")
-    model = create_model(chars, n_a, maxlen, 0.01) if not args.loadmodel else load_model(model_path)
+        model = create_model(chars, n_a, maxlen, learning_rate)
+        epoch_number = 0
     metrics = []
     data = "".join(train)
     nummsgs = math.floor(len(data) / maxlen)
@@ -116,16 +157,27 @@ def main(args):
             X[msgs, t, char_index] = 1
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
-    epoch_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs, model_path))
+    #epoch_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs, model_path))
+    callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model)
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
-              callbacks=[epoch_callback])
+              initial_epoch=epoch_number,
+              callbacks=callbacks)
 
 def parse_args():
     parser= argparse.ArgumentParser()
     parser.add_argument("--loadmodel", action="store_true", default=False)
-    parser.add_argument("--datadir", default="/slackdata/")
+    parser.add_argument("--datadir", default="data/")
+    parser.add_argument("--volumedir", default="/training/")
+    parser.add_argument("--checkpointdir", default="checkpoints/")
+    parser.add_argument("--checkpointnames", default="nodle_char_model.{epoch:03d}.h5")
+    parser.add_argument("--step", default=5)
+    parser.add_argument("--hiddensize", default=128)
+    parser.add_argument("--minibatchsize", default=512)
+    parser.add_argument("--numepochs", default=60)
+    parser.add_argument("--seqlength", default=40)
+    parser.add_argument("--learningrate", default=0.01)
     return parser.parse_args()
 
 if __name__=="__main__":
