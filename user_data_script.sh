@@ -38,9 +38,9 @@ if [ $VOLUME_ID ]; then
 		sleep 10
 
 		# Mount volume and change ownership, since this script is run as root
-		mkdir /dltraining
-		mount /dev/xvdf /dltraining
-		chown -R ubuntu: /dltraining/
+		mkdir /training
+		mount /dev/xvdf /training
+		chown -R ubuntu: /training/
 		cd /home/ubuntu/
 
 		# Get training code
@@ -50,7 +50,7 @@ if [ $VOLUME_ID ]; then
 
 		# Initiate training using the tensorflow_36 conda environment
 #		sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow_p36; python ec2_spot_keras_training.py"
-		nvidia-docker run -dt -v /dltraining/home/ubuntu/slackdata/:/slackdata -v /home/ubuntu/slackml/:/slackml 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.3.0-gpu-py37-cu102-ubuntu18.04 python slackml/src/keras_char_lm.py
+		nvidia-docker run -dt -v /training/:/training/ -v /home/ubuntu/slackml/:/slackml 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.3.0-gpu-py37-cu102-ubuntu18.04 python slackml/src/keras_char_lm.py
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself
