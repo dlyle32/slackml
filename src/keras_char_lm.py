@@ -56,6 +56,7 @@ def sample(data, model, chars, char_to_ix, temperature=1.0):
         new_char = chars[char_index]
         output += new_char
         inpt = inpt[1:] + new_char
+    print("\n" + output[:40] + "->" + output[40:])
     return output
 
 def get_ix_from_char(char_to_ix, chars, c):
@@ -69,7 +70,6 @@ def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
     #for lbl in metrics.keys():
     #    print(lbl + ": " + str(metrics[lbl]))
     sample_msg = sample(data, model, chars, char_to_ix)
-    print("\n" + sample_msg[:40] + "->" + sample_msg[40:])
 
 def oh_to_char(chars, oh):
     char = [chars[i] for i,c in enumerate(oh) if c == 1]
@@ -99,7 +99,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
     # Loss history callback
     epoch_results_callback = CSVLogger(os.path.join(volume_mount_dir, 'training_log_{}.csv'.format(today_date)),
                                        append=True)
-    sample_callbak = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
+    sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
 
     class SpotTermination(keras.callbacks.Callback):
         def on_batch_begin(self, batch, logs={}):
@@ -112,7 +112,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
 
     spot_termination_callback = SpotTermination()
 
-    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback]
+    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback, sample_callback]
     return callbacks
 
 def main(args):
@@ -172,12 +172,12 @@ def parse_args():
     parser.add_argument("--volumedir", default="/training/")
     parser.add_argument("--checkpointdir", default="checkpoints/")
     parser.add_argument("--checkpointnames", default="nodle_char_model.{epoch:03d}.h5")
-    parser.add_argument("--step", default=5)
-    parser.add_argument("--hiddensize", default=128)
-    parser.add_argument("--minibatchsize", default=512)
-    parser.add_argument("--numepochs", default=60)
-    parser.add_argument("--seqlength", default=40)
-    parser.add_argument("--learningrate", default=0.01)
+    parser.add_argument("--step", type=int, default=5)
+    parser.add_argument("--hiddensize", type=int, default=128)
+    parser.add_argument("--minibatchsize", type=int, default=512)
+    parser.add_argument("--numepochs", type=int, default=60)
+    parser.add_argument("--seqlength", type=int, default=40)
+    parser.add_argument("--learningrate", type=float, default=0.01)
     return parser.parse_args()
 
 if __name__=="__main__":
