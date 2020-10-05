@@ -2,7 +2,7 @@
 # Get instance ID, Instance AZ, Volume ID and Volume AZ 
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 INSTANCE_AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-AWS_REGION=us-east-2a
+AWS_REGION=us-east-2
 
 VOLUME_ID=$(aws ec2 describe-volumes --region $AWS_REGION --filter "Name=tag:Name,Values=slack-data-checkpoints" --query "Volumes[].VolumeId" --output text)
 VOLUME_AZ=$(aws ec2 describe-volumes --region $AWS_REGION --filter "Name=tag:Name,Values=slack-data-checkpoints" --query "Volumes[].AvailabilityZone" --output text)
@@ -49,8 +49,8 @@ if [ $VOLUME_ID ]; then
 		cd slackml
 
 		# Initiate training using the tensorflow_36 conda environment
-#		sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow_p36; python ec2_spot_keras_training.py"
-		nvidia-docker run -dt -v /training/:/training/ -v /home/ubuntu/slackml/:/slackml 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.3.0-gpu-py37-cu102-ubuntu18.04 python slackml/src/keras_char_lm.py
+		cat training_args.txt | xargs sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow_p36; python src/keras_char_lm.py"
+#		nvidia-docker run -it -v /training/:/training/ -v /home/ubuntu/slackml/:/slackml 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.3.0-gpu-py37-cu102-ubuntu18.04 python slackml/src/keras_char_lm.py
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself

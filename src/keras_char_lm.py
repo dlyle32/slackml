@@ -27,7 +27,7 @@ def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
     model = Sequential([
         LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-        LSTM(n_a),
+        #LSTM(n_a),
         Dense(vocab_size, activation="softmax")
     ])
     opt = RMSprop(learning_rate=lr)
