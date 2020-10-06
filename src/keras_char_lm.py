@@ -77,7 +77,7 @@ def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
 def on_batch_end(batch, logs, volumedir):
     if batch % 100 == 0:
         fieldnames = logs.keys()
-        with open(os.join(volumedir, "batch_metrics.csv")) as csvfile:
+        with open(os.path.join(volumedir, "batch_metrics.csv"), "a+") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames)
             if batch == 0:
                 writer.writeheader()
