@@ -3,7 +3,7 @@ from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import LSTM, Dropout
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.optimizers import Adam, RMSprop
@@ -15,6 +15,7 @@ import requests
 import datetime
 import time
 import glob
+import csv
 import sys
 import io
 import os
@@ -27,10 +28,12 @@ def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
     model = Sequential([
         LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-        #LSTM(n_a),
+        Dropout(0.3),
+        LSTM(n_a),
+        Dropout(0.3),
         Dense(vocab_size, activation="softmax")
     ])
-    opt = RMSprop(learning_rate=lr)
+    opt = RMSprop(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
     print(model.summary())
     return model
@@ -71,6 +74,15 @@ def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
     #    print(lbl + ": " + str(metrics[lbl]))
     sample_msg = sample(data, model, chars, char_to_ix)
 
+def on_batch_end(batch, logs, volumedir):
+    if batch % 100 == 0:
+        fieldnames = logs.keys()
+        with open(os.join(volumedir, "batch_metrics.csv")) as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames)
+            if batch == 0:
+                writer.writeheader()
+            writer.writerow(logs)
+
 def oh_to_char(chars, oh):
     char = [chars[i] for i,c in enumerate(oh) if c == 1]
     return "0" if len(char) == 0 else char[0]
@@ -101,6 +113,8 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
                                        append=True)
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
 
+    batch_callback = LambdaCallback(on_batch_end=lambda batch, logs: on_batch_end(batch, logs, volume_mount_dir))
+
     class SpotTermination(keras.callbacks.Callback):
         def on_batch_begin(self, batch, logs={}):
             try:
@@ -112,7 +126,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
 
     spot_termination_callback = SpotTermination()
 
-    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback, sample_callback]
+    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback, sample_callback, batch_callback]
     return callbacks
 
 def main(args):
@@ -157,7 +171,6 @@ def main(args):
             X[msgs, t, char_index] = 1
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
-    #epoch_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs, model_path))
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model)
     model.fit(X,Y,
               batch_size=mini_batch_size,
@@ -174,7 +187,7 @@ def parse_args():
     parser.add_argument("--checkpointnames", default="nodle_char_model.{epoch:03d}.h5")
     parser.add_argument("--step", type=int, default=5)
     parser.add_argument("--hiddensize", type=int, default=128)
-    parser.add_argument("--minibatchsize", type=int, default=512)
+    parser.add_argument("--minibatchsize", type=int, default=1024)
     parser.add_argument("--numepochs", type=int, default=60)
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
