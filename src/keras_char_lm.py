@@ -197,7 +197,7 @@ def parse_args():
     parser.add_argument("--step", type=int, default=5)
     parser.add_argument("--hiddensize", type=int, default=128)
     parser.add_argument("--minibatchsize", type=int, default=1024)
-    parser.add_argument("--numepochs", type=int, default=60)
+    parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
     return parser.parse_args()
