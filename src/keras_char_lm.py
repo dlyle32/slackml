@@ -77,10 +77,10 @@ def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
     #    print(lbl + ": " + str(metrics[lbl]))
     sample_msg = sample(data, model, chars, char_to_ix)
 
-def on_batch_end(batch, logs, volumedir):
+def on_batch_end(batch, logs, volumedir, timestamp):
     if batch % 100 == 0:
         fieldnames = logs.keys()
-        with open(os.path.join(volumedir, "batch_metrics.csv"), "a+") as csvfile:
+        with open(os.path.join(volumedir, "batch_metrics_%d.csv" % timestamp), "a+") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames)
             if batch == 0:
                 writer.writeheader()
@@ -103,7 +103,7 @@ def load_checkpoint_model(checkpoint_path, checkpoint_names):
     resume_model = load_model(checkpoint_epoch_path)
     return resume_model, checkpoint_epoch_number
 
-def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, data, model):
+def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, data, model, timestamp):
     today_date = datetime.datetime.today().strftime('%Y-%m-%d')
     if not os.path.isdir(checkpoint_path):
         os.makedirs(checkpoint_path)
@@ -116,7 +116,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
                                        append=True)
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
 
-    batch_callback = LambdaCallback(on_batch_end=lambda batch, logs: on_batch_end(batch, logs, volume_mount_dir))
+    batch_callback = LambdaCallback(on_batch_end=lambda batch, logs: on_batch_end(batch, logs, volume_mount_dir, timestamp))
 
     class SpotTermination(keras.callbacks.Callback):
         def on_batch_begin(self, batch, logs={}):
@@ -141,7 +141,10 @@ def main(args):
     learning_rate = args.learningrate
     n_a = args.hiddensize
     num_epochs = args.numepochs
-    hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % time.time()))
+    timestamp = time.time()
+    checkpointnames = checkpointnames % timestamp
+    print(checkpointnames)
+    hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
@@ -180,7 +183,8 @@ def main(args):
             X[msgs, t, char_index] = 1
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
-    callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model)
+    callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model, timestamp)
+    return
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
@@ -193,7 +197,7 @@ def parse_args():
     parser.add_argument("--datadir", default="data/")
     parser.add_argument("--volumedir", default="/training/")
     parser.add_argument("--checkpointdir", default="checkpoints/")
-    parser.add_argument("--checkpointnames", default="nodle_char_model.{epoch:03d}.h5")
+    parser.add_argument("--checkpointnames", default="nodle_char_model.%d.{epoch:03d}.h5")
     parser.add_argument("--step", type=int, default=5)
     parser.add_argument("--hiddensize", type=int, default=128)
     parser.add_argument("--minibatchsize", type=int, default=1024)
