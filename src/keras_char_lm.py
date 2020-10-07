@@ -20,9 +20,12 @@ import sys
 import io
 import os
 import argparse
+import logging
 import json
 from functools import reduce
 from data.load import load_datasets
+
+logger = logging.getLogger('keras_char_lm')
 
 def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
@@ -35,7 +38,7 @@ def create_model(chars, n_a, maxlen, lr):
     ])
     opt = RMSprop(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
-    print(model.summary())
+    model.summary(print_fn=logger.info)
     return model
 
 def sample(data, model, chars, char_to_ix, temperature=1.0):
@@ -59,7 +62,7 @@ def sample(data, model, chars, char_to_ix, temperature=1.0):
         new_char = chars[char_index]
         output += new_char
         inpt = inpt[1:] + new_char
-    print("\n" + output[:40] + "->" + output[40:])
+    logger.info("\n" + output[:40] + "->" + output[40:])
     return output
 
 def get_ix_from_char(char_to_ix, chars, c):
@@ -122,7 +125,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
                 if status_code != 404:
                     time.sleep(150)
             except:
-                print("Request unsuccessful")
+                logger.warning("Request unsuccessful")
 
     spot_termination_callback = SpotTermination()
 
@@ -138,6 +141,12 @@ def main(args):
     learning_rate = args.learningrate
     n_a = args.hiddensize
     num_epochs = args.numepochs
+    hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % time.time()))
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
+
     train, test = load_datasets(datadir)
     m = len(train)
     chars = set()
