@@ -143,7 +143,6 @@ def main(args):
     num_epochs = args.numepochs
     timestamp = time.time()
     checkpointnames = checkpointnames % timestamp
-    print(checkpointnames)
     hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr.setFormatter(formatter)
@@ -184,7 +183,6 @@ def main(args):
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model, timestamp)
-    return
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
