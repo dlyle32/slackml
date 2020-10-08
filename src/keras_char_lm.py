@@ -97,7 +97,7 @@ def char_to_oh(index, vocab_size):
 
 def load_checkpoint_model(checkpoint_path, checkpoint_names):
     list_of_checkpoint_files = glob.glob(os.path.join(checkpoint_path, '*'))
-    checkpoint_epoch_number = max([int(file.split(".")[1]) for file in list_of_checkpoint_files])
+    checkpoint_epoch_number = max([int(file.split(".")[2]) for file in list_of_checkpoint_files])
     checkpoint_epoch_path = os.path.join(checkpoint_path,
                                          checkpoint_names.format(epoch=checkpoint_epoch_number))
     resume_model = load_model(checkpoint_epoch_path)
@@ -141,6 +141,7 @@ def main(args):
     learning_rate = args.learningrate
     n_a = args.hiddensize
     num_epochs = args.numepochs
+    loadmodel = args.loadmodel
     timestamp = time.time()
     checkpointnames = checkpointnames % timestamp
     hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
@@ -161,7 +162,7 @@ def main(args):
     chars = ['\n', ' ', '!', '"', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '?', '@', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '~', '*']
     char_to_ix = {c: i for i, c in enumerate(chars)}
 
-    if os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
+    if loadmodel and os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
         model, epoch_number = load_checkpoint_model(checkpointdir, checkpointnames)
     else:
         model = create_model(chars, n_a, maxlen, learning_rate)
