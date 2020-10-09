@@ -151,6 +151,7 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     train, test = load_datasets(datadir)
+    train = train[:min(len(train), args.datacap)]
     m = len(train)
     chars = set()
     step = args.step
@@ -203,6 +204,7 @@ def parse_args():
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
+    parser.add_argument("--datacap", type=int, default=10000)
     return parser.parse_args()
 
 if __name__=="__main__":
