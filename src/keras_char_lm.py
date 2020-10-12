@@ -29,20 +29,25 @@ logger = logging.getLogger('keras_char_lm')
 
 def create_model(chars, n_a, maxlen, lr):
     vocab_size = len(chars)
-    model = Sequential([
-        LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-        Dropout(0.3),
-        LSTM(n_a),
-        Dropout(0.3),
-        Dense(vocab_size, activation="softmax")
-    ])
+    x = Input(shape=(maxlen,vocab_size), name="input")
+    out = LSTM(n_a, return_sequences=True, dtype='float64')(x)
+    out = LSTM(n_a, dtype='float64')(out)
+    out = Dense(vocab_size, dtype='float64', activation='softmax')(out)
+    # model = Sequential([
+    #     LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
+    #     Dropout(0.3),
+    #     LSTM(n_a),
+    #     Dropout(0.3),
+    #     Dense(vocab_size, activation="softmax")
+    # ])
+    model = keras.Model(inputs = x, outputs=out)
     opt = RMSprop(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
     model.summary(print_fn=logger.info)
     return model
 
 def sample(data, model, chars, char_to_ix, temperature=1.0):
-    maxlen=model.layers[0].input_shape[1]
+    maxlen = model.get_layer(name="input").input_shape[0][1]
     vocab_size =model.layers[-1].output_shape[-1]
     char_index = -1
     i = random.randint(0, len(data) - maxlen - 1)
