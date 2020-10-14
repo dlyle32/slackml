@@ -27,11 +27,13 @@ from data.load import load_datasets
 
 logger = logging.getLogger('keras_char_lm')
 
-def create_model(chars, n_a, maxlen, lr):
+def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2):
     vocab_size = len(chars)
     x = Input(shape=(maxlen,vocab_size), name="input")
     out = LSTM(n_a, return_sequences=True, dtype='float64')(x)
+    out = Dropout(dropout_rate)(out)
     out = LSTM(n_a, dtype='float64')(out)
+    out = Dropout(dropout_rate)(out)
     out = Dense(vocab_size, dtype='float64', activation='softmax')(out)
     # model = Sequential([
     #     LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
@@ -144,6 +146,7 @@ def main(args):
     checkpointnames = args.checkpointnames
     mini_batch_size = args.minibatchsize
     learning_rate = args.learningrate
+    dropout_rate = args.dropoutrate
     n_a = args.hiddensize
     num_epochs = args.numepochs
     loadmodel = args.loadmodel
@@ -171,7 +174,7 @@ def main(args):
     if loadmodel and os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
         model, epoch_number = load_checkpoint_model(checkpointdir, checkpointnames)
     else:
-        model = create_model(chars, n_a, maxlen, learning_rate)
+        model = create_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate)
         epoch_number = 0
     metrics = []
     data = "".join(train)
@@ -211,6 +214,7 @@ def parse_args():
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
+    parser.add_argument("--dropoutrate", type=float, default=0.2)
     parser.add_argument("--datacap", type=int, default=10000)
     return parser.parse_args()
 
