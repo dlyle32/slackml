@@ -207,7 +207,7 @@ def parse_args():
     parser.add_argument("--checkpointnames", default="nodle_char_model.%d.{epoch:03d}.h5")
     parser.add_argument("--step", type=int, default=5)
     parser.add_argument("--hiddensize", type=int, default=128)
-    parser.add_argument("--minibatchsize", type=int, default=1024)
+    parser.add_argument("--minibatchsize", type=int, default=256)
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
