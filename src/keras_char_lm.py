@@ -194,6 +194,8 @@ def main(args):
               batch_size=mini_batch_size,
               epochs=num_epochs,
               initial_epoch=epoch_number,
+              validation_split=0.2,
+              shuffle=True,
               callbacks=callbacks)
 
 def parse_args():
