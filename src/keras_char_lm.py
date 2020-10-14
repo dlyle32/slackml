@@ -178,11 +178,11 @@ def main(args):
     nummsgs = math.floor(len(data) / maxlen)
     if len(data) % maxlen != 0:
         nummsgs += 1
-    nummsgs = len(data) - maxlen
+    nummsgs = math.floor((len(data) - maxlen)/step) +1
     X = np.zeros((nummsgs, maxlen, len(chars)))
     Y = np.zeros((nummsgs, len(chars)))
     msgs = 0
-    for i in range(0,nummsgs, step):
+    for i in range(0,len(data)-maxlen, step):
         last_ix = min(i+maxlen, len(data)-1)
         for t,c in enumerate(data[i:last_ix]):
             char_index = get_ix_from_char(char_to_ix, chars, c)
