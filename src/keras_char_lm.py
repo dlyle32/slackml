@@ -187,7 +187,6 @@ def main(args):
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model, timestamp)
-    return
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
