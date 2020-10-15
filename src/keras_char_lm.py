@@ -3,7 +3,7 @@ from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import LSTM, Dropout
+from tensorflow.keras.layers import LSTM, Dropout, Bidirectional
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.optimizers import Adam, RMSprop
@@ -29,19 +29,13 @@ logger = logging.getLogger('keras_char_lm')
 
 def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2):
     vocab_size = len(chars)
+    tf.keras.backend.set_floatx('float64')
     x = Input(shape=(maxlen,vocab_size), name="input")
-    out = LSTM(n_a, return_sequences=True, dtype='float64')(x)
+    out = Bidirectional(LSTM(n_a, return_sequences=True))(x)
     out = Dropout(dropout_rate)(out)
-    out = LSTM(n_a, dtype='float64')(out)
+    out = Bidirectional(LSTM(n_a))(out)
     out = Dropout(dropout_rate)(out)
-    out = Dense(vocab_size, dtype='float64', activation='softmax')(out)
-    # model = Sequential([
-    #     LSTM(n_a, input_shape=(maxlen, vocab_size), return_sequences=True),
-    #     Dropout(0.3),
-    #     LSTM(n_a),
-    #     Dropout(0.3),
-    #     Dense(vocab_size, activation="softmax")
-    # ])
+    out = Dense(vocab_size, activation='softmax')(out)
     model = keras.Model(inputs = x, outputs=out)
     opt = RMSprop(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
@@ -193,6 +187,7 @@ def main(args):
         Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
         msgs+=1
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model, timestamp)
+    return
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
