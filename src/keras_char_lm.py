@@ -3,7 +3,7 @@ from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import LSTM, Dropout, Bidirectional
+from tensorflow.keras.layers import LSTM, Dropout, Bidirectional, BatchNormalization
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.optimizers import Adam, RMSprop
@@ -33,8 +33,10 @@ def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2):
     x = Input(shape=(maxlen,vocab_size), name="input")
     out = Bidirectional(LSTM(n_a, return_sequences=True))(x)
     out = Dropout(dropout_rate)(out)
+    out = BatchNormalization()(out)
     out = Bidirectional(LSTM(n_a))(out)
     out = Dropout(dropout_rate)(out)
+    out = BatchNormalization()(out)
     out = Dense(vocab_size, activation='softmax')(out)
     model = keras.Model(inputs = x, outputs=out)
     opt = RMSprop(learning_rate=lr, clipvalue=3)
