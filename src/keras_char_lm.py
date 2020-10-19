@@ -115,7 +115,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
                                           save_weights_only=False,
                                           monitor='val_loss')
     # Loss history callback
-    epoch_results_callback = CSVLogger(os.path.join(volume_mount_dir, 'training_log_{}.csv'.format(today_date)),
+    epoch_results_callback = CSVLogger(os.path.join(volume_mount_dir, 'training_log_{}_{}.csv'.format(today_date, timestsamp)),
                                        append=True)
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
 
