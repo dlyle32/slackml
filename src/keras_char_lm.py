@@ -8,6 +8,7 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.optimizers import Adam, RMSprop
 from tensorflow.keras.models import load_model
+from tensorflow.keras import regularizers
 import numpy as np
 import random
 import math
@@ -27,17 +28,18 @@ from data.load import load_datasets
 
 logger = logging.getLogger('keras_char_lm')
 
-def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2):
+def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.01):
     vocab_size = len(chars)
+    reg = regularizers.l2(reg_factor)
     tf.keras.backend.set_floatx('float64')
     x = Input(shape=(maxlen,vocab_size), name="input")
-    out = LSTM(n_a, return_sequences=True)(x)
+    out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
     out = Dropout(dropout_rate)(out)
-    out = LSTM(n_a, return_sequences=True)(x)
+    out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
     out = Dropout(dropout_rate)(out)
-    out = LSTM(n_a)(out)
+    out = LSTM(n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
     out = Dropout(dropout_rate)(out)
-    out = Dense(vocab_size, activation='softmax')(out)
+    out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
     model = keras.Model(inputs = x, outputs=out)
     opt = RMSprop(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
@@ -143,6 +145,7 @@ def main(args):
     mini_batch_size = args.minibatchsize
     learning_rate = args.learningrate
     dropout_rate = args.dropoutrate
+    reg_factor = args.regfactor
     n_a = args.hiddensize
     num_epochs = args.numepochs
     loadmodel = args.loadmodel
@@ -170,7 +173,7 @@ def main(args):
     if loadmodel and os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
         model, epoch_number = load_checkpoint_model(checkpointdir, checkpointnames)
     else:
-        model = create_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate)
+        model = create_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate, reg_factor=reg_factor)
         epoch_number = 0
     metrics = []
     data = "".join(train)
@@ -211,6 +214,7 @@ def parse_args():
     parser.add_argument("--seqlength", type=int, default=40)
     parser.add_argument("--learningrate", type=float, default=0.01)
     parser.add_argument("--dropoutrate", type=float, default=0.2)
+    parser.add_argument("--regfactor", type=float, default=0.01)
     parser.add_argument("--datacap", type=int, default=10000)
     return parser.parse_args()
 
