@@ -28,7 +28,7 @@ from data.load import load_datasets
 
 logger = logging.getLogger('keras_char_lm')
 
-def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.01):
+def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
     vocab_size = len(chars)
     reg = regularizers.l2(reg_factor)
     tf.keras.backend.set_floatx('float64')
@@ -100,13 +100,13 @@ def char_to_oh(index, vocab_size):
     x[index] = 1
     return x
 
-def load_checkpoint_model(checkpoint_path, checkpoint_names):
-    list_of_checkpoint_files = glob.glob(os.path.join(checkpoint_path, '*'))
-    checkpoint_epoch_number = max([int(file.split(".")[2]) for file in list_of_checkpoint_files])
-    checkpoint_epoch_path = os.path.join(checkpoint_path,
-                                         checkpoint_names.format(epoch=checkpoint_epoch_number))
-    resume_model = load_model(checkpoint_epoch_path)
-    return resume_model, checkpoint_epoch_number
+def load_checkpoint_model(model_path):
+    # list_of_checkpoint_files = glob.glob(os.path.join(checkpoint_path, '*'))
+    # checkpoint_epoch_number = max([int(file.split(".")[2]) for file in list_of_checkpoint_files])
+    # checkpoint_epoch_path = os.path.join(checkpoint_path,
+    #                                      checkpoint_names.format(epoch=checkpoint_epoch_number))
+    resume_model = load_model(model_path)
+    return resume_model
 
 def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, data, model, timestamp):
     today_date = datetime.datetime.today().strftime('%Y-%m-%d')
@@ -151,11 +151,6 @@ def main(args):
     loadmodel = args.loadmodel
     timestamp = time.time()
     checkpointnames = checkpointnames % timestamp
-    hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-    logger.setLevel(logging.INFO)
 
     train, test = load_datasets(datadir)
     train = train[:min(len(train), args.datacap)]
@@ -170,11 +165,19 @@ def main(args):
     chars = ['\n', ' ', '!', '"', ',', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '?', '@', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '~', '*']
     char_to_ix = {c: i for i, c in enumerate(chars)}
 
-    if loadmodel and os.path.isdir(checkpointdir) and any(glob.glob(os.path.join(checkpointdir, '*'))):
-        model, epoch_number = load_checkpoint_model(checkpointdir, checkpointnames)
+    if loadmodel and os.path.exists(loadmodel):
+        timestamp = int(loadmodel.split(".")[1])
+        epoch_number = int(loadmodel.split(".")[2])
+        model = load_checkpoint_model(loadmodel)
     else:
         model = create_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate, reg_factor=reg_factor)
         epoch_number = 0
+
+    hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
     metrics = []
     data = "".join(train)
     nummsgs = math.floor(len(data) / maxlen)
@@ -202,7 +205,7 @@ def main(args):
 
 def parse_args():
     parser= argparse.ArgumentParser()
-    parser.add_argument("--loadmodel", action="store_true", default=False)
+    parser.add_argument("--loadmodel", type=str)
     parser.add_argument("--datadir", default="data/")
     parser.add_argument("--volumedir", default="/training/")
     parser.add_argument("--checkpointdir", default="checkpoints/")
