@@ -147,7 +147,7 @@ def main(args):
     n_a = args.hiddensize
     num_epochs = args.numepochs
     loadmodel = args.loadmodel
-    timestamp = time.time()
+    timestamp = int(time.time())
     checkpointnames = checkpointnames % timestamp
 
     train, test = load_datasets(datadir)
