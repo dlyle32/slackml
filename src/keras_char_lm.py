@@ -248,7 +248,7 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
     metrics = []
-    X,Y = format_x_y_no_seed(maxlen,chars, train, step, char_to_ix)
+    X,Y = format_x_y(maxlen,chars, train, step, char_to_ix)
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, train, model, timestamp)
     model.fit(X,Y,
               batch_size=mini_batch_size,
