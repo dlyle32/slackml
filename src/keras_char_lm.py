@@ -170,7 +170,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
 
     spot_termination_callback = SpotTermination()
 
-    callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback, sample_callback, batch_callback]
+    callbacks = [checkpoint_callback, epoch_results_callback, sample_callback, batch_callback]
     return callbacks
 
 def format_x_y(maxlen, chars, train, step, char_to_ix):
