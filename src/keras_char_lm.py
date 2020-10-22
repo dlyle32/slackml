@@ -35,6 +35,8 @@ def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
     x = Input(shape=(maxlen,vocab_size), name="input")
     out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
     out = Dropout(dropout_rate)(out)
+    out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
+    out = Dropout(dropout_rate)(out)
     out = LSTM(n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
     out = Dropout(dropout_rate)(out)
     out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
