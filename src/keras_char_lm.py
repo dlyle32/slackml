@@ -46,10 +46,46 @@ def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
     model.summary(print_fn=logger.info)
     return model
 
-def sample(data, model, chars, char_to_ix, temperature=1.0):
+def create_seq2seq_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
+    vocab_size = len(chars)
+    reg = regularizers.l2(reg_factor)
+    tf.keras.backend.set_floatx('float64')
+    x = Input(shape=(maxlen,vocab_size), name="input")
+    out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
+    out = Dropout(dropout_rate)(out)
+    out = LSTM(n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
+    out = Dropout(dropout_rate)(out)
+    out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
+    model = keras.Model(inputs = x, outputs=out)
+    opt = Adam(learning_rate=lr, clipvalue=3)
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
+    model.summary(print_fn=logger.info)
+    return model
+
+def sample_no_seed(train, model, chars, char_to_ix, temperature=1.0):
+    maxlen = model.get_layer(name="input").input_shape[0][1]
+    vocab_size = model.layers[-1].output_shape[-1]
+    output =  ""
+    inpt = ""
+    x = np.zeros((1, maxlen, vocab_size))
+    char_index = -1
+    i = 0
+    while char_index != char_to_ix['\n']:
+        x[0] = [char_to_oh(get_ix_from_char(char_to_ix, chars, c), vocab_size) for c in inpt]
+        preds = model.predict(x, verbose=0)[0][i]
+        char_index = np.random.choice(range(vocab_size), p = preds.ravel())
+        new_char = chars[char_index]
+        output += new_char
+        inpt = inpt[1:] + new_char
+        i = min(i+1, maxlen-1)
+    logger.info("\n" + output[:40] + "->" + output[40:])
+    return output
+
+def sample(train, model, chars, char_to_ix, temperature=1.0):
     maxlen = model.get_layer(name="input").input_shape[0][1]
     vocab_size =model.layers[-1].output_shape[-1]
     char_index = -1
+    data = "".join(train)
     i = random.randint(0, len(data) - maxlen - 1)
     inpt = data[i:i+maxlen]
     output = inpt
@@ -76,11 +112,11 @@ def get_ix_from_char(char_to_ix, chars, c):
     else:
         return char_to_ix["*"]
 
-def on_epoch_end(data, epoch, model, chars, char_to_ix, metrics):
+def on_epoch_end(train, epoch, model, chars, char_to_ix, metrics):
     #print("COMPLETED EPOCH %d" % epoch)
     #for lbl in metrics.keys():
     #    print(lbl + ": " + str(metrics[lbl]))
-    sample_msg = sample(data, model, chars, char_to_ix)
+    sample_msg = sample(train, model, chars, char_to_ix)
 
 def on_batch_end(batch, logs, volumedir, timestamp):
     if batch % 100 == 0:
@@ -108,7 +144,7 @@ def load_checkpoint_model(model_path):
     resume_model = load_model(model_path)
     return resume_model
 
-def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, data, model, timestamp):
+def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, char_to_ix, train, model, timestamp):
     today_date = datetime.datetime.today().strftime('%Y-%m-%d')
     if not os.path.isdir(checkpoint_path):
         os.makedirs(checkpoint_path)
@@ -119,7 +155,7 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
     # Loss history callback
     epoch_results_callback = CSVLogger(os.path.join(volume_mount_dir, 'training_log_{}_{:d}.csv'.format(today_date, timestamp)),
                                        append=True)
-    sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(data,epoch, model, chars, char_to_ix, logs))
+    sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: on_epoch_end(train,epoch, model, chars, char_to_ix, logs))
 
     batch_callback = LambdaCallback(on_batch_end=lambda batch, logs: on_batch_end(batch, logs, volume_mount_dir, timestamp))
 
@@ -136,6 +172,39 @@ def get_callbacks(volume_mount_dir, checkpoint_path, checkpoint_names, chars, ch
 
     callbacks = [checkpoint_callback, epoch_results_callback, spot_termination_callback, sample_callback, batch_callback]
     return callbacks
+
+def format_x_y(maxlen, chars, train, step, char_to_ix):
+    data = "".join(train)
+    nummsgs = math.floor((len(data) - maxlen)/step) +1
+    X = np.zeros((nummsgs, maxlen, len(chars)))
+    Y = np.zeros((nummsgs, len(chars)))
+    msgs = 0
+    for i in range(0, len(data) - maxlen, step):
+        last_ix = min(i + maxlen, len(data) - 1)
+        for t, c in enumerate(data[i:last_ix]):
+            char_index = get_ix_from_char(char_to_ix, chars, c)
+            X[msgs, t, char_index] = 1
+        Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
+        msgs += 1
+    return X, Y
+
+def format_x_y_no_seed(maxlen, chars, train, step, char_to_ix):
+    nummsgs = len(train)
+    X = np.zeros((nummsgs, maxlen, len(chars)))
+    Y = np.zeros((nummsgs, maxlen, len(chars)))
+    msgs = 0
+    for i in range(0, nummsgs, step):
+        data = train[i][:maxlen]
+        for t, c in enumerate(data):
+            char_index = get_ix_from_char(char_to_ix, chars, c)
+            Y[msgs, t, char_index] = 1
+            if t < len(data)-1:
+                X[msgs, t+1, char_index] = 1
+        space_index = get_ix_from_char(char_to_ix, chars, " ")
+        X[msgs, t+1:, space_index] = 1
+        Y[msgs, t+1:, space_index] = 1
+        msgs += 1
+    return X, Y
 
 def main(args):
     volumedir = args.volumedir
@@ -179,22 +248,8 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
     metrics = []
-    data = "".join(train)
-    nummsgs = math.floor(len(data) / maxlen)
-    if len(data) % maxlen != 0:
-        nummsgs += 1
-    nummsgs = math.floor((len(data) - maxlen)/step) +1
-    X = np.zeros((nummsgs, maxlen, len(chars)))
-    Y = np.zeros((nummsgs, len(chars)))
-    msgs = 0
-    for i in range(0,len(data)-maxlen, step):
-        last_ix = min(i+maxlen, len(data)-1)
-        for t,c in enumerate(data[i:last_ix]):
-            char_index = get_ix_from_char(char_to_ix, chars, c)
-            X[msgs, t, char_index] = 1
-        Y[msgs, get_ix_from_char(char_to_ix, chars, data[last_ix])] = 1
-        msgs+=1
-    callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, data, model, timestamp)
+    X,Y = format_x_y_no_seed(maxlen,chars, train, step, char_to_ix)
+    callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, train, model, timestamp)
     model.fit(X,Y,
               batch_size=mini_batch_size,
               epochs=num_epochs,
