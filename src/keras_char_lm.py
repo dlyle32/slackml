@@ -41,7 +41,7 @@ def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
     out = Dropout(dropout_rate)(out)
     out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
     model = keras.Model(inputs = x, outputs=out)
-    opt = RMSprop(learning_rate=lr, clipvalue=3)
+    opt = Adam(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
     model.summary(print_fn=logger.info)
     return model
