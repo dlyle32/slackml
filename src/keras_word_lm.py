@@ -85,14 +85,14 @@ class WordLanguageModelBuilder:
         return output
 
     def format_input(self, tokens, vocab, reverse_token_map):
-        nummsgs = math.floor(len(tokens) - self.maxlen / self.step) + 1
+        nummsgs = math.floor((len(tokens) - self.maxlen) / self.step) + 1
         X = np.zeros((nummsgs, self.maxlen, len(vocab)))
         Y = np.zeros((nummsgs, len(vocab)))
         j = 0
         for i in range(0, len(tokens) - self.maxlen, self.step):
             last_ix = min(i + self.maxlen, len(tokens)-1)
-            X[j, :, :] = [token_to_oh(reverse_token_map[token], len(vocab)) for token in tokens[i:last_ix]]
-            Y[j, :] = token_to_oh(reverse_token_map[tokens[last_ix]], len(vocab))
+            X[j, :, :] = [token_to_oh(get_ix_from_token(reverse_token_map, token), len(vocab)) for token in tokens[i:last_ix]]
+            Y[j, :] = token_to_oh(get_ix_from_token(reverse_token_map, tokens[last_ix]), len(vocab))
             j += 1
         return X, Y
 
