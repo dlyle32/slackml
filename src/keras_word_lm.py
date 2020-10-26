@@ -29,11 +29,21 @@ class WordLanguageModelBuilder:
         self.n_a = args.hiddensize
         self.step = args.step
         self.maxlen = args.seqlength
-        self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
+        #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
+        self.tokenizer = nltk.RegexpTokenizer("&gt|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
-    def tokenize(self, data):
-        tokens = self.tokenizer.tokenize("".join(data))
-        vocab = sorted(list(set(tokens)))
+    def tokenize(self, data, freq_threshold=5):
+        #tokens = " ".join(data).split(" ")
+        tokens = self.tokenizer.tokenize(" ".join(data))
+        token_counts = {}
+        for t in tokens:
+            if t not in token_counts.keys():
+                token_counts[t] = 1
+            else:
+                token_counts[t] += 1
+        freq_filtered = filter(lambda elem: elem[1] >= freq_threshold, token_counts.items())
+        vocab = sorted([elem[0] for elem in list(freq_filtered)])
+        #vocab = sorted(list(set(tokens)))
         vocab += ["<UNK>"]
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
         return tokens, vocab, reverse_token_map
@@ -126,7 +136,7 @@ def main(args):
     train = train[:min(len(train), args.datacap)]
 
     modelBuilder = WordLanguageModelBuilder(args)
-    tokens, vocab, reverse_token_map = modelBuilder.tokenize(train)
+    tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
 
     timestamp = int(time.time())
     init_epoch = 0
@@ -176,6 +186,7 @@ def parse_args():
     parser.add_argument("--dropoutrate", type=float, default=0.2)
     parser.add_argument("--regfactor", type=float, default=0.01)
     parser.add_argument("--datacap", type=int, default=10000)
+    parser.add_argument("--freqthreshold", type=int, default=5)
     return parser.parse_args()
 
 if __name__=="__main__":
