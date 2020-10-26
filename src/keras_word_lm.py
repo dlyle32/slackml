@@ -34,6 +34,7 @@ class WordLanguageModelBuilder:
     def tokenize(self, data):
         tokens = self.tokenizer.tokenize("".join(data))
         vocab = sorted(list(set(tokens)))
+        vocab += ["<UNK>"]
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
         return tokens, vocab, reverse_token_map
 
@@ -59,15 +60,17 @@ class WordLanguageModelBuilder:
         token_ix = -1
         i = random.randint(0, len(tokens) - maxlen - 1)
         inpt = tokens[i:i + maxlen]
-        output = inpt
+        output = ""
+        for t in inpt:
+            output += t
         while token_ix != reverse_token_map['\n']:
             x = np.zeros((1, maxlen, vocab_size))
-            x[0] = [token_to_oh(reverse_token_map[token], vocab_size) for token in inpt]
+            x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
             preds = model.predict(x, verbose=0)[0]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
-            inpt = inpt[1:] + new_token
+            inpt = inpt[1:] + [new_token]
         logger.info("\n" + output[:maxlen] + "->" + output[maxlen:])
         return output
 
@@ -84,11 +87,11 @@ class WordLanguageModelBuilder:
         return X, Y
 
 
-def get_ix_from_token(char_to_ix, chars, c):
-    if c in chars:
-        return char_to_ix[c]
+def get_ix_from_token(reverse_token_map, token):
+    if token in reverse_token_map.keys():
+        return reverse_token_map[token]
     else:
-        return char_to_ix["*"]
+        return reverse_token_map["<UNK>"]
 
 def oh_to_token(vocab, oh):
     tokens = [vocab[i] for i,c in enumerate(oh) if c == 1]
@@ -149,8 +152,8 @@ def main(args):
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
     model.fit(X, Y,
-               batch_size=args.mini_batch_size,
-               epochs=args.num_epochs,
+               batch_size=args.minibatchsize,
+               epochs=args.numepochs,
                initial_epoch=init_epoch,
                validation_split=0.2,
                shuffle=True,
