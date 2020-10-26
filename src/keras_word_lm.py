@@ -84,16 +84,26 @@ class WordLanguageModelBuilder:
         logger.info("\n" + output[:maxlen] + "->" + output[maxlen:])
         return output
 
-    def format_input(self, tokens, vocab, reverse_token_map):
+    def get_input_sequences(self, tokens):
         nummsgs = math.floor((len(tokens) - self.maxlen) / self.step) + 1
-        X = np.zeros((nummsgs, self.maxlen, len(vocab)))
-        Y = np.zeros((nummsgs, len(vocab)))
         j = 0
+        seqs = []
         for i in range(0, len(tokens) - self.maxlen, self.step):
             last_ix = min(i + self.maxlen, len(tokens)-1)
-            X[j, :, :] = [token_to_oh(get_ix_from_token(reverse_token_map, token), len(vocab)) for token in tokens[i:last_ix]]
-            Y[j, :] = token_to_oh(get_ix_from_token(reverse_token_map, tokens[last_ix]), len(vocab))
+            Xseq = tokens[i:last_ix]
+            Ytoken = tokens[last_ix]
+            seqs.append((Xseq, Ytoken))
             j += 1
+        return seqs
+
+    def build_input_vectors(self, seqs, vocab, reverse_token_map):
+        X = np.zeros((len(seqs), self.maxlen, len(vocab)))
+        Y = np.zeros((len(seqs), len(vocab)))
+        j = 0
+        for Xseq, Ytoken in seqs:
+            X[j, :, :] = [token_to_oh(get_ix_from_token(reverse_token_map, token), len(vocab)) for token in Xseq]
+            Y[j, :] = token_to_oh(get_ix_from_token(reverse_token_map, Ytoken), len(vocab))
+            j+=1
         return X, Y
 
 
@@ -130,6 +140,19 @@ def get_callbacks(volumedir, checkpointdir, checkpointnames, timestamp, sample_f
     callbacks = [checkpoint_callback, epoch_results_callback, sample_callback]
     return callbacks
 
+def rand_mini_batches(seqs, mini_batch_size):
+    m = len(seqs)
+    np.random.shuffle(seqs)
+    numbatches = math.floor(m / mini_batch_size)
+    if m % mini_batch_size != 0:
+        numbatches += 1
+    minibatches = []
+    for i in range(0, numbatches):
+        start = i * mini_batch_size
+        end = min((i + 1) * mini_batch_size, m)
+        minibatches.append(seqs[start:end])
+    return minibatches
+
 def main(args):
     datadir = os.path.join(args.volumedir, args.datadir)
     train, test = load_datasets(datadir)
@@ -154,20 +177,30 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
 
-    X, Y = modelBuilder.format_input(tokens, vocab, reverse_token_map)
-
     checkpointdir = os.path.join(args.volumedir, args.checkpointdir)
     checkpointnames = args.checkpointnames % timestamp
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    model.fit(X, Y,
-               batch_size=args.minibatchsize,
-               epochs=args.numepochs,
-               initial_epoch=init_epoch,
-               validation_split=0.2,
-               shuffle=True,
-               callbacks=callbacks)
+    seqs = modelBuilder.get_input_sequences(tokens)
+
+    metrics = {}
+    for epoch in range(init_epoch, args.numepochs):
+        batches = rand_mini_batches(seqs, args.minibatchsize)
+        for i, batch in enumerate(batches):
+            X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
+            metrics = model.train_on_batch(X, Y, reset_metrics = i==0, return_dict=True)
+        logger.info(metrics)
+        sample_func()
+        model.save(os.path.join(checkpointdir, checkpointnames).format(epoch))
+
+    # model.fit(X, Y,
+    #            batch_size=args.minibatchsize,
+    #            epochs=args.numepochs,
+    #            initial_epoch=init_epoch,
+    #            validation_split=0.2,
+    #            shuffle=True,
+    #            callbacks=callbacks)
 
 
 def parse_args():
