@@ -45,6 +45,16 @@ def rand_mini_batches(seqs, mini_batch_size):
         minibatches.append(seqs[start:end])
     return minibatches
 
+def validation_split(data, val_split = 0.2):
+    train = []
+    val = []
+    for dat in data:
+        if (random.random() < val_split):
+            val.append(dat)
+        else:
+            train.append(dat)
+    return train, val
+
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
@@ -83,9 +93,11 @@ def main(args):
 
     seqs = modelBuilder.get_input_sequences(tokens)
 
+    trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
+
     metrics = {}
     for epoch in range(init_epoch, args.numepochs):
-        batches = rand_mini_batches(seqs, args.minibatchsize)
+        batches = rand_mini_batches(trainseqs, args.minibatchsize)
         for i, batch in enumerate(batches):
             X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
             metrics = model.train_on_batch(X, Y, reset_metrics = i==0, return_dict=True)
@@ -94,6 +106,9 @@ def main(args):
         logger.info(metrics)
         sample_func()
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
+        Xval, Yval = modelBuilder.build_input_vectors(valseqs, vocab, reverse_token_map)
+        valmetrics = model.evaluate(Xval, Yval, batch_size= args.minibatchsize)
+        logger.info("Validation metrics %s" % str(valmetrics))
 
     # model.fit(X, Y,
     #            batch_size=args.minibatchsize,
@@ -122,6 +137,7 @@ def parse_args():
     parser.add_argument("--datacap", type=int, default=10000)
     parser.add_argument("--freqthreshold", type=int, default=5)
     parser.add_argument("--modelbuilder", type=str)
+    parser.add_argument("--valsplit", type=float, default=0.2)
     return parser.parse_args()
 
 if __name__=="__main__":
