@@ -73,6 +73,7 @@ class WordLanguageModelBuilder:
         output = ""
         for t in inpt:
             output += t
+        output += "->"
         while token_ix != reverse_token_map['\n']:
             x = np.zeros((1, maxlen, vocab_size))
             x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
@@ -81,7 +82,7 @@ class WordLanguageModelBuilder:
             new_token = vocab[token_ix]
             output += new_token
             inpt = inpt[1:] + [new_token]
-        logger.info("\n" + output[:maxlen] + "->" + output[maxlen:])
+        logger.info("\n" + output)
         return output
 
     def get_input_sequences(self, tokens):
@@ -190,9 +191,11 @@ def main(args):
         for i, batch in enumerate(batches):
             X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
             metrics = model.train_on_batch(X, Y, reset_metrics = i==0, return_dict=True)
+            if i % 100 == 0:
+                print("Batch %d of %d in epoch %d: %s" % (i, len(batches), epoch, str(metrics)))
         logger.info(metrics)
         sample_func()
-        model.save(os.path.join(checkpointdir, checkpointnames).format(epoch))
+        model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
 
     # model.fit(X, Y,
     #            batch_size=args.minibatchsize,
