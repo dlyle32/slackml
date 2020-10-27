@@ -81,15 +81,15 @@ class WordLanguageModelBuilder:
         logger.info("\n" + output)
         return output
 
-    def get_input_sequences(self, tokens):
+    def get_input_sequences(self, tokens, reverse_token_map):
         nummsgs = math.floor((len(tokens) - self.maxlen) / self.step) + 1
         j = 0
         seqs = []
         for i in range(0, len(tokens) - self.maxlen, self.step):
             last_ix = min(i + self.maxlen, len(tokens)-1)
-            Xseq = tokens[i:last_ix]
-            Ytoken = tokens[last_ix]
-            seqs.append((Xseq, Ytoken))
+            Xseq = [get_ix_from_token(reverse_token_map, token) for token in tokens[i:last_ix]]
+            Yix = get_ix_from_token(reverse_token_map, tokens[last_ix])
+            seqs.append((Xseq, Yix))
             j += 1
         return seqs
 
@@ -97,9 +97,9 @@ class WordLanguageModelBuilder:
         X = np.zeros((len(seqs), self.maxlen, len(vocab)))
         Y = np.zeros((len(seqs), len(vocab)))
         j = 0
-        for Xseq, Ytoken in seqs:
-            X[j, :, :] = [token_to_oh(get_ix_from_token(reverse_token_map, token), len(vocab)) for token in Xseq]
-            Y[j, :] = token_to_oh(get_ix_from_token(reverse_token_map, Ytoken), len(vocab))
+        for Xseq, Yix in seqs:
+            X[j, :, :] = [token_to_oh(ix, len(vocab)) for ix in Xseq]
+            Y[j, :] = token_to_oh(Yix, len(vocab))
             j+=1
         return X, Y
 

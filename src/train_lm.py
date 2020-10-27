@@ -91,7 +91,7 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    seqs = modelBuilder.get_input_sequences(tokens)
+    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
     trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
