@@ -26,7 +26,7 @@ class WordLanguageModelBuilder:
         self.step = args.step
         self.maxlen = args.seqlength
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
-        self.tokenizer = nltk.RegexpTokenizer("&gt|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
+        self.tokenizer = nltk.RegexpTokenizer("\,|\.|&gt|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
     def tokenize(self, data, freq_threshold=5):
         #tokens = " ".join(data).split(" ")
@@ -53,6 +53,7 @@ class WordLanguageModelBuilder:
         out = Dropout(self.dropout_rate)(out)
         out = LSTM(self.n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         out = Dropout(self.dropout_rate)(out)
+        out = Dense(self.n_a, activation='relu', kernel_regularizer=reg)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
         model = keras.Model(inputs=x, outputs=out)
         opt = RMSprop(learning_rate=self.learning_rate, clipvalue=3)
