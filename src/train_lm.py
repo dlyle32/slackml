@@ -55,6 +55,14 @@ def validation_split(data, val_split = 0.2):
             train.append(dat)
     return train, val
 
+def evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, data, mini_batch_size):
+    batches = rand_mini_batches(data, mini_batch_size)
+    metrics = {}
+    for i, batch in enumerate(batches):
+        X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
+        metrics = model.test_on_batch(X, Y, reset_metrics=i == 0, return_dict=True)
+    return metrics
+
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
@@ -105,11 +113,10 @@ def main(args):
             if i % 100 == 0:
                 print("Batch %d of %d in epoch %d: %s" % (i, len(batches), epoch, str(metrics)))
         logger.info(metrics)
+        valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs, args.minibatchsize)
+        logger.info("Validation metrics %s" % str(valmetrics))
         sample_func()
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
-        Xval, Yval = modelBuilder.build_input_vectors(valseqs, vocab, reverse_token_map)
-        valmetrics = model.evaluate(Xval, Yval, batch_size= args.minibatchsize)
-        logger.info("Validation metrics %s" % str(valmetrics))
 
     # model.fit(X, Y,
     #            batch_size=args.minibatchsize,

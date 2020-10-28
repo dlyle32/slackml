@@ -71,7 +71,10 @@ class WordLanguageModelBuilder:
         for t in inpt:
             output += t
         output += "->"
-        while token_ix != reverse_token_map['\n']:
+        mintokens = 15
+        maxtokens = 100
+        i = 0
+        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
             x = np.zeros((1, maxlen, vocab_size))
             x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
             preds = model.predict(x, verbose=0)[0]
@@ -79,6 +82,7 @@ class WordLanguageModelBuilder:
             new_token = vocab[token_ix]
             output += new_token
             inpt = inpt[1:] + [new_token]
+            i+=1
         logger.info("\n" + output)
         return output
 
