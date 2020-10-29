@@ -131,7 +131,8 @@ def main(args):
         logger.info("Epoch %d: %s" % (epoch, str(metrics)))
         valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs, args.minibatchsize)
         logger.info("Validation metrics %s" % str(valmetrics))
-        sample_func()
+        sample_output = sample_func()
+        logger.info("\n" + sample_output)
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
 
     # model.fit(X, Y,
