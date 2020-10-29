@@ -121,7 +121,6 @@ def main(args):
     trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
     metrics = {}
-    logger.info(vocab)
     for epoch in range(init_epoch, args.numepochs):
         batches = rand_mini_batches(trainseqs, args.minibatchsize)
         for i, batch in enumerate(batches):
