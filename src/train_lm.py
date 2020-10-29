@@ -112,7 +112,7 @@ def main(args):
             metrics = model.train_on_batch(X, Y, reset_metrics = i==0, return_dict=True)
             if i % 100 == 0:
                 print("Batch %d of %d in epoch %d: %s" % (i, len(batches), epoch, str(metrics)))
-        logger.info(metrics)
+        logger.info("Epoch %d: %s" % (epoch, str(valmetrics)))
         valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs, args.minibatchsize)
         logger.info("Validation metrics %s" % str(valmetrics))
         sample_func()
