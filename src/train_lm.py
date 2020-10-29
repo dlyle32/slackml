@@ -63,6 +63,18 @@ def evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, data, m
         metrics = model.test_on_batch(X, Y, reset_metrics=i == 0, return_dict=True)
     return metrics
 
+def save_vocab(vocab, checkpointsdir, timestamp):
+    fname = os.path.join(checkpointsdir, "vocab.%d.tsv" % timestamp)
+    with open(fname, "w") as fp:
+        fp.write("\t".join(vocab))
+
+def load_vocab(checkpointdir, timestamp):
+    fname = os.path.join(checkpointdir, "vocab.%d.tsv" % timestamp)
+    with open(fname, "r") as fp:
+        vocab = fp.read().split("\t")
+    return vocab
+
+
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
@@ -84,18 +96,22 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
 
+    checkpointdir = os.path.join(args.volumedir, args.checkpointdir)
+
     # Create or load existing model
     init_epoch = 0
     if args.loadmodel and os.path.exists(args.loadmodel):
         modelpath = args.loadmodel
         timestamp = int(modelpath.split(".")[1])
         init_epoch = int(modelpath.split(".")[2])
-        model = load_model(modelpath), init_epoch
+        model = load_model(modelpath)
+        vocab = load_vocab(checkpointdir, timestamp)
     else:
         model = modelBuilder.create_model(vocab)
+        save_vocab(vocab, checkpointdir, timestamp)
+
     model.summary(print_fn=logger.info)
 
-    checkpointdir = os.path.join(args.volumedir, args.checkpointdir)
     checkpointnames = args.checkpointnames % timestamp
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
