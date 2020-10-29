@@ -77,8 +77,14 @@ def main(args):
 
     tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
 
-    # Create or load existing model
     timestamp = int(time.time())
+    hdlr = logging.FileHandler(os.path.join(args.volumedir, "training_output_%d.log" % timestamp))
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
+
+    # Create or load existing model
     init_epoch = 0
     if args.loadmodel and os.path.exists(args.loadmodel):
         modelpath = args.loadmodel
@@ -87,12 +93,7 @@ def main(args):
         model = load_model(modelpath), init_epoch
     else:
         model = modelBuilder.create_model(vocab)
-
-    hdlr = logging.FileHandler(os.path.join(args.volumedir, "training_output_%d.log" % timestamp))
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-    logger.setLevel(logging.INFO)
+    model.summary(print_fn=logger.info)
 
     checkpointdir = os.path.join(args.volumedir, args.checkpointdir)
     checkpointnames = args.checkpointnames % timestamp
