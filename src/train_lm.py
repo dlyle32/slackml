@@ -23,6 +23,7 @@ def get_callbacks(volumedir, checkpointdir, checkpointnames, timestamp, sample_f
                                           save_weights_only=False,
                                           monitor='val_loss')
     # Loss history callback
+    # WILL NEED TO ADD LOGDIR IF I USE CALLBACKS AGAIN
     epoch_results_callback = CSVLogger(
         os.path.join(volumedir, 'training_log_{}_{:d}.csv'.format(today_date, timestamp)),
         append=True)
@@ -90,13 +91,18 @@ def main(args):
     tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
 
     timestamp = int(time.time())
-    hdlr = logging.FileHandler(os.path.join(args.volumedir, "training_output_%d.log" % timestamp))
+    logdir = os.path.join(args.volumedir, args.logdir, datetime.datetime.today().strftime('%Y%m%d'))
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+    hdlr = logging.FileHandler(os.path.join(logdir, "training_output_%d.log" % timestamp))
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
 
-    checkpointdir = os.path.join(args.volumedir, args.checkpointdir)
+    checkpointdir = os.path.join(args.volumedir, args.checkpointdir, datetime.datetime.today().strftime('%Y%m%d'))
+    if not os.path.isdir(checkpointdir):
+        os.makedirs(checkpointdir)
 
     # Create or load existing model
     init_epoch = 0
@@ -148,6 +154,7 @@ def parse_args():
     parser= argparse.ArgumentParser()
     parser.add_argument("--loadmodel", type=str)
     parser.add_argument("--datadir", default="data/")
+    parser.add_argument("--logdir", default="logs/")
     parser.add_argument("--volumedir", default="/training/")
     parser.add_argument("--checkpointdir", default="checkpoints/")
     parser.add_argument("--checkpointnames", default="nodle_char_model.%d.{epoch:03d}.h5")
