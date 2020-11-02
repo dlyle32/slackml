@@ -80,7 +80,7 @@ def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
     train, test = load_datasets(datadir)
-    train = sorted(train, key=lambda a: len(a), reverse=True)
+    # train = sorted(train, key=lambda a: len(a), reverse=True)
     train = train[:min(len(train), args.datacap)]
 
     # Dynamically load modelBuilder class

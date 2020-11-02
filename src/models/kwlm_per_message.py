@@ -90,7 +90,7 @@ class PerMessageLanguageModelBuilder:
         return output
 
     def get_full_input_sequences(self, tokens, reverse_token_map):
-        tokens = sorted(tokens, key=lambda a: len(a), reverse=True)
+        tokens = sorted(tokens, key=lambda a: len(a))
         left = 0
         right = len(tokens)-1
         seqs = []
