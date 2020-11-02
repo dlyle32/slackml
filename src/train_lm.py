@@ -80,6 +80,7 @@ def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
     train, test = load_datasets(datadir)
+    train = sorted(train, key=lambda a: len(a), reverse=True)
     train = train[:min(len(train), args.datacap)]
 
     # Dynamically load modelBuilder class
@@ -163,6 +164,8 @@ def parse_args():
     parser.add_argument("--minibatchsize", type=int, default=256)
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
+    parser.add_argument("--minlength", type=int, default=15)
+    parser.add_argument("--maxlength", type=int, default=200)
     parser.add_argument("--learningrate", type=float, default=0.01)
     parser.add_argument("--dropoutrate", type=float, default=0.2)
     parser.add_argument("--regfactor", type=float, default=0.01)

@@ -22,7 +22,9 @@ class PerMessageLanguageModelBuilder:
         self.reg_factor = args.regfactor
         self.n_a = args.hiddensize
         self.step = args.step
-        self.maxlen = args.seqlength
+        self.seqlen = args.seqlength
+        self.minlen = args.minlength
+        self.maxlen = args.maxlength
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
         self.tokenizer = nltk.RegexpTokenizer("\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -40,6 +42,10 @@ class PerMessageLanguageModelBuilder:
                 else:
                     token_counts[t] += 1
             tokens.append(linetokens)
+
+        # filter out messages that are too short or too long
+        tokens = list(filter(lambda a: len(a) >= self.minlen and len(a) <= self.maxlen, tokens))
+
         freq_filtered = filter(lambda elem: elem[1] >= freq_threshold, token_counts.items())
         vocab = sorted([elem[0] for elem in list(freq_filtered)])
         #vocab = sorted(list(set(tokens)))
@@ -51,7 +57,7 @@ class PerMessageLanguageModelBuilder:
         vocab_size = len(vocab)
         reg = regularizers.l2(self.reg_factor)
         tf.keras.backend.set_floatx('float64')
-        x = Input(shape=(self.maxlen, vocab_size), name="input")
+        x = Input(shape=(self.seqlen, vocab_size), name="input")
         out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
         out = Dropout(self.dropout_rate)(out)
         out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
@@ -63,18 +69,18 @@ class PerMessageLanguageModelBuilder:
         return model
 
     def sample(self, model, tokens, vocab, reverse_token_map):
-        maxlen = self.maxlen
+        seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
-        inpt = [" " for i in range(self.maxlen)]
+        inpt = [" " for i in range(self.seqlen)]
         output = ""
         mintokens = 15
         maxtokens = 100
         i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
-            x = np.zeros((1, maxlen, vocab_size))
+            x = np.zeros((1, seqlen, vocab_size))
             x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
-            preds = model.predict(x, verbose=0)[0][min(i,self.maxlen-1)]
+            preds = model.predict(x, verbose=0)[0][min(i,self.seqlen-1)]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
@@ -83,18 +89,18 @@ class PerMessageLanguageModelBuilder:
         return output
 
     def get_input_sequences(self, tokens, reverse_token_map):
-        nummsgs = math.floor((len(tokens) - self.maxlen) / self.step) + 1
+        nummsgs = math.floor((len(tokens) - self.seqlen) / self.step) + 1
         seqs = []
         for line in tokens:
-            padded_sequence = char_padded(line[:self.maxlen], " ", self.maxlen)
+            padded_sequence = char_padded(line[:self.seqlen], " ", self.seqlen)
             Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
             Xseq = [get_ix_from_token(reverse_token_map, " ")] + Yseq[:-1]
             seqs.append((Xseq, Yseq))
         return seqs
 
     def build_input_vectors(self, seqs, vocab, reverse_token_map):
-        X = np.zeros((len(seqs), self.maxlen, len(vocab)))
-        Y = np.zeros((len(seqs), self.maxlen, len(vocab)))
+        X = np.zeros((len(seqs), self.seqlen, len(vocab)))
+        Y = np.zeros((len(seqs), self.seqlen, len(vocab)))
         j = 0
         for Xseq, Yseq in seqs:
             X[j, :, :] = [token_to_oh(ix, len(vocab)) for ix in Xseq]
