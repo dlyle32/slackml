@@ -50,6 +50,7 @@ class PerMessageLanguageModelBuilder:
         vocab = sorted([elem[0] for elem in list(freq_filtered)])
         #vocab = sorted(list(set(tokens)))
         vocab += ["<UNK>"]
+        vocab += ["START"]
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
         return tokens, vocab, reverse_token_map
 
@@ -72,7 +73,7 @@ class PerMessageLanguageModelBuilder:
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
-        inpt = [" " for i in range(self.seqlen)]
+        inpt = ["START" for i in range(self.seqlen)]
         output = ""
         mintokens = 15
         maxtokens = 100
@@ -88,7 +89,40 @@ class PerMessageLanguageModelBuilder:
             i+=1
         return output
 
-    def get_input_sequences(self, tokens, reverse_token_map):
+    def get_full_input_sequences(self, tokens, reverse_token_map):
+        tokens = sorted(tokens, key=lambda a: len(a), reverse=True)
+        left = 0
+        right = len(tokens)-1
+        seqs = []
+        Xseq = []
+        Yseq = []
+        while left < right:
+            if len(Yseq) + len(tokens[right][:self.seqlen]) <= self.seqlen:
+                newSeq = tokens[right][:self.seqlen]
+                Yseq += newSeq
+                Xseq += ["START"] + newSeq[:-1]
+                right -= 1
+            if len(Yseq) + len(tokens[left][:self.seqlen]) <= self.seqlen:
+                newSeq = tokens[left][:self.seqlen]
+                Yseq += newSeq
+                Xseq += ["START"] + newSeq[:-1]
+                left += 1
+            else:
+                paddedX = [get_ix_from_token(reverse_token_map, token) for token in char_padded(Xseq, " ", self.seqlen)]
+                paddedY = [get_ix_from_token(reverse_token_map, token) for token in char_padded(Yseq, " ", self.seqlen)]
+                seqs.append((paddedX, paddedY))
+                Yseq = []
+                Xseq = []
+        paddedX = [get_ix_from_token(reverse_token_map, token) for token in char_padded(Xseq, " ", self.seqlen)]
+        paddedY = [get_ix_from_token(reverse_token_map, token) for token in char_padded(Yseq, " ", self.seqlen)]
+        seqs.append((paddedX, paddedY))
+        return seqs
+
+
+
+    def get_input_sequences(self, tokens, reverse_token_map, full=True):
+        if full:
+            return self.get_full_input_sequences(tokens, reverse_token_map)
         nummsgs = math.floor((len(tokens) - self.seqlen) / self.step) + 1
         seqs = []
         for line in tokens:

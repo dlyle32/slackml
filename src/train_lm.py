@@ -123,7 +123,7 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map, full=args.fillseqs)
 
     trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
@@ -173,6 +173,7 @@ def parse_args():
     parser.add_argument("--freqthreshold", type=int, default=5)
     parser.add_argument("--modelbuilder", type=str)
     parser.add_argument("--valsplit", type=float, default=0.2)
+    parser.add_argument("--fillseqs", action="store_true")
     return parser.parse_args()
 
 if __name__=="__main__":
