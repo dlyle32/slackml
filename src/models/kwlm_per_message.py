@@ -29,7 +29,25 @@ class PerMessageLanguageModelBuilder:
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
         self.tokenizer = nltk.RegexpTokenizer("\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
-    def tokenize(self, data, freq_threshold=5):
+    def sliding_window_tokenize(self, data, freq_threshold=5):
+        #tokens = " ".join(data).split(" ")
+        tokens = self.tokenizer.tokenize("START ".join(data))
+        token_counts = {}
+        for t in tokens:
+            if t not in token_counts.keys():
+                token_counts[t] = 1
+            else:
+                token_counts[t] += 1
+        freq_filtered = filter(lambda elem: elem[1] >= freq_threshold, token_counts.items())
+        vocab = sorted([elem[0] for elem in list(freq_filtered)])
+        #vocab = sorted(list(set(tokens)))
+        vocab += ["<UNK>"]
+        reverse_token_map = {t: i for i, t in enumerate(vocab)}
+        return tokens, vocab, reverse_token_map
+
+    def tokenize(self, data, freq_threshold=5, sliding_window=True):
+        if sliding_window:
+            return self.sliding_window_tokenize(data, freq_threshold)
         #tokens = " ".join(data).split(" ")
         # tokens = self.tokenizer.tokenize("<START>".join(data))
         tokens = []
@@ -119,10 +137,24 @@ class PerMessageLanguageModelBuilder:
         return seqs
 
 
+    def sliding_window_input_sequences(self, tokens, reverse_token_map):
+        nummsgs = math.floor((len(tokens) - self.seqlen) / self.step) + 1
+        seqs = []
+        x0 = "START"
+        for i in range(0, len(tokens) - self.seqlen, self.step):
+            x0 = "START" if i == 0 else tokens[i-1]
+            last_ix = min(i + self.seqlen, len(tokens) - 1)
+            padded_sequence = char_padded(tokens[i:last_ix], " ", self.seqlen)
+            Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
+            Xseq = [get_ix_from_token(reverse_token_map, x0)] + Yseq[:-1]
+            seqs.append((Xseq, Yseq))
+        return seqs
 
-    def get_input_sequences(self, tokens, reverse_token_map, full=True):
+    def get_input_sequences(self, tokens, reverse_token_map, full=True, sliding_window=True):
         if full:
             return self.get_full_input_sequences(tokens, reverse_token_map)
+        if sliding_window:
+            return self.sliding_window_input_sequences(tokens, reverse_token_map)
         nummsgs = math.floor((len(tokens) - self.seqlen) / self.step) + 1
         seqs = []
         for line in tokens:
