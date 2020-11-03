@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import LSTM, Dropout, Bidirectional, BatchNormalization
+from tensorflow.keras.layers import LSTM, Dropout, Embedding
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
@@ -25,6 +25,7 @@ class PerMessageLanguageModelBuilder:
         self.seqlen = args.seqlength
         self.minlen = args.minlength
         self.maxlen = args.maxlength
+        self.embedding = args.embedding
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
         self.tokenizer = nltk.RegexpTokenizer("\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -76,8 +77,13 @@ class PerMessageLanguageModelBuilder:
         vocab_size = len(vocab)
         reg = regularizers.l2(self.reg_factor)
         tf.keras.backend.set_floatx('float64')
-        x = Input(shape=(self.seqlen, vocab_size), name="input")
-        out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
+        if self.embedding:
+            x = Input(shape=(self.seqlen), name="input")
+            out = Embedding(vocab_size, 100, input_length=self.seqlen)(x)
+            out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
+        else:
+            x = Input(shape=(self.seqlen, vocab_size), name="input")
+            out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
         out = Dropout(self.dropout_rate)(out)
         out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         out = Dropout(self.dropout_rate)(out)
@@ -97,13 +103,20 @@ class PerMessageLanguageModelBuilder:
         maxtokens = 100
         i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
-            x = np.zeros((1, seqlen, vocab_size))
-            x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
+            if self.embedding:
+                x = np.zeros((1, seqlen))
+                x[0] = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+            else:
+                x = np.zeros((1, seqlen, vocab_size))
+                x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
             preds = model.predict(x, verbose=0)[0][min(i,self.seqlen-1)]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
-            inpt = inpt[1:] + [new_token]
+            if(i+1 < len(inpt)):
+                inpt[i+1] = new_token
+            else:
+                inpt = inpt[1:] + [new_token]
             i+=1
         return output
 
@@ -165,11 +178,17 @@ class PerMessageLanguageModelBuilder:
         return seqs
 
     def build_input_vectors(self, seqs, vocab, reverse_token_map):
-        X = np.zeros((len(seqs), self.seqlen, len(vocab)))
         Y = np.zeros((len(seqs), self.seqlen, len(vocab)))
+        if self.embedding:
+            X = np.zeros((len(seqs), self.seqlen))
+        else:
+            X = np.zeros((len(seqs), self.seqlen, len(vocab)))
         j = 0
         for Xseq, Yseq in seqs:
-            X[j, :, :] = [token_to_oh(ix, len(vocab)) for ix in Xseq]
+            if self.embedding:
+                X[j, :] = Xseq
+            else:
+                X[j, :, :] = [token_to_oh(ix, len(vocab)) for ix in Xseq]
             Y[j, :, :] = [token_to_oh(ix, len(vocab)) for ix in Yseq]
             j+=1
         return X, Y
