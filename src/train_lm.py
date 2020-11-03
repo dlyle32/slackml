@@ -75,6 +75,18 @@ def load_vocab(checkpointdir, timestamp):
         vocab = fp.read().split("\t")
     return vocab
 
+def save_tokens(tokens, checkpointsdir, timestamp):
+    fname = os.path.join(checkpointsdir, "tokenized_train_data.%d.tsv" % timestamp)
+    with open(fname, "w") as fp:
+        fp.write("\t".join(tokens))
+
+def load_tokens(checkpointdir, timestamp):
+    fname = os.path.join(checkpointdir, "tokenized_train_data.%d.tsv" % timestamp)
+    if(not os.path.exists(fname)):
+        return []
+    with open(fname, "r") as fp:
+        tokens = fp.read().split("\t")
+    return tokens
 
 def main(args):
     # load train/test data
@@ -113,9 +125,12 @@ def main(args):
         init_epoch = int(modelpath.split(".")[2])
         model = load_model(modelpath)
         vocab = load_vocab(checkpointdir, timestamp)
+        tokens = load_tokens(checkpointdir, timestamp)
     else:
         model = modelBuilder.create_model(vocab)
         save_vocab(vocab, checkpointdir, timestamp)
+        if args.savetokens:
+            save_tokens(tokens, checkpointdir, timestamp)
 
     model.summary(print_fn=logger.info)
 
@@ -174,6 +189,8 @@ def parse_args():
     parser.add_argument("--modelbuilder", type=str)
     parser.add_argument("--valsplit", type=float, default=0.2)
     parser.add_argument("--fillseqs", action="store_true")
+    parser.add_argument("--savetokens", action="store_true")
+    parser.add_argument("--embedding", action="store_true")
     return parser.parse_args()
 
 if __name__=="__main__":
