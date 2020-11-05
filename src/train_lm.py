@@ -122,9 +122,10 @@ def main(args):
         modelpath = args.loadmodel
         timestamp = int(modelpath.split(".")[1])
         init_epoch = int(modelpath.split(".")[2])
+        loaddir = "/".join(modelpath.split("/")[:-1])
         model = load_model(modelpath)
-        vocab = load_vocab(checkpointdir, timestamp)
-        tokens = load_tokens(checkpointdir, timestamp)
+        vocab = load_vocab(loaddir, timestamp)
+        tokens = load_tokens(loaddir, timestamp)
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
     else:
         tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
