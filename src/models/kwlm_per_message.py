@@ -26,6 +26,10 @@ class PerMessageLanguageModelBuilder:
         self.minlen = args.minlength
         self.maxlen = args.maxlength
         self.embedding = args.embedding
+
+        optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
+        self.optimizer = optimizer_map[args.optimizer] if args.optimizer in optimizer_map.keys() else RMSprop
+
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
         self.tokenizer = nltk.RegexpTokenizer("\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -89,7 +93,9 @@ class PerMessageLanguageModelBuilder:
         out = Dropout(self.dropout_rate)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
         model = keras.Model(inputs=x, outputs=out)
-        opt = RMSprop(learning_rate=self.learning_rate, clipvalue=3)
+
+        opt = self.optimizer(learning_rate=self.learning_rate, clipvalue=3)
+
         model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
         return model
 
@@ -102,7 +108,7 @@ class PerMessageLanguageModelBuilder:
         mintokens = 15
         maxtokens = 100
         i = 0
-        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
+        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['START']):
             if self.embedding:
                 x = np.zeros((1, seqlen))
                 x[0] = [get_ix_from_token(reverse_token_map, token) for token in inpt]
@@ -111,6 +117,8 @@ class PerMessageLanguageModelBuilder:
                 x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
             preds = model.predict(x, verbose=0)[0][min(i,self.seqlen-1)]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+            while token_ix == reverse_token_map["<UNK>"]:
+                token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
             if(i+1 < len(inpt)):
