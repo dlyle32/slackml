@@ -101,7 +101,6 @@ def main(args):
     klass = getattr(mod,klassName)
     modelBuilder = klass(args)
 
-    tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
 
     timestamp = int(time.time())
     logdir = os.path.join(args.volumedir, args.logdir, datetime.datetime.today().strftime('%Y%m%d'))
@@ -126,7 +125,9 @@ def main(args):
         model = load_model(modelpath)
         vocab = load_vocab(checkpointdir, timestamp)
         tokens = load_tokens(checkpointdir, timestamp)
+        reverse_token_map = {t: i for i, t in enumerate(vocab)}
     else:
+        tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
         model = modelBuilder.create_model(vocab)
         save_vocab(vocab, checkpointdir, timestamp)
         if args.savetokens:
@@ -191,6 +192,7 @@ def parse_args():
     parser.add_argument("--fillseqs", action="store_true")
     parser.add_argument("--savetokens", action="store_true")
     parser.add_argument("--embedding", action="store_true")
+    parser.add_argument("--optimizer", default="rmsprop")
     return parser.parse_args()
 
 if __name__=="__main__":
