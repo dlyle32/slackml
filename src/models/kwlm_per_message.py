@@ -32,7 +32,7 @@ class PerMessageLanguageModelBuilder:
 
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
-        self.tokenizer = nltk.RegexpTokenizer("\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
+        self.tokenizer = nltk.RegexpTokenizer("\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
     def sliding_window_tokenize(self, data, freq_threshold=5):
         #tokens = " ".join(data).split(" ")
