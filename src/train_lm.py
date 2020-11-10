@@ -118,6 +118,7 @@ def main(args):
 
     # Create or load existing model
     init_epoch = 0
+    tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
     if args.loadmodel and os.path.exists(args.loadmodel):
         modelpath = args.loadmodel
         timestamp = int(modelpath.split(".")[1])
@@ -125,10 +126,9 @@ def main(args):
         loaddir = "/".join(modelpath.split("/")[:-1])
         model = load_model(modelpath)
         vocab = load_vocab(loaddir, timestamp)
-        tokens = load_tokens(loaddir, timestamp)
+        # tokens = load_tokens(loaddir, timestamp)
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
     else:
-        tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
         model = modelBuilder.create_model(vocab)
         save_vocab(vocab, checkpointdir, timestamp)
         if args.savetokens:
