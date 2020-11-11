@@ -5,7 +5,6 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM, Dropout, Embedding
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
-from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 import numpy as np
@@ -26,9 +25,6 @@ class PerMessageLanguageModelBuilder:
         self.minlen = args.minlength
         self.maxlen = args.maxlength
         self.embedding = args.embedding
-
-        optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
-        self.optimizer = optimizer_map[args.optimizer] if args.optimizer in optimizer_map.keys() else RMSprop
 
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -93,10 +89,6 @@ class PerMessageLanguageModelBuilder:
         out = Dropout(self.dropout_rate)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
         model = keras.Model(inputs=x, outputs=out)
-
-        opt = self.optimizer(learning_rate=self.learning_rate, clipvalue=3)
-
-        model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
         return model
 
     def sample(self, model, tokens, vocab, reverse_token_map):

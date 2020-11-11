@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import load_model
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 import numpy as np
 import random
 import math
@@ -133,6 +134,11 @@ def main(args):
         save_vocab(vocab, checkpointdir, timestamp)
         if args.savetokens:
             save_tokens(tokens, checkpointdir, timestamp)
+
+    optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
+    optimizer = optimizer_map[args.optimizer] if args.optimizer in optimizer_map.keys() else RMSprop
+    opt = optimizer(learning_rate=args.learningrate, clipvalue=3)
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
 
     model.summary(print_fn=logger.info)
 
