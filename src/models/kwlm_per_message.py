@@ -85,8 +85,8 @@ class PerMessageLanguageModelBuilder:
             x = Input(shape=(self.seqlen, vocab_size), name="input")
             out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
         out = Dropout(self.dropout_rate)(out)
-        out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
-        out = Dropout(self.dropout_rate)(out)
+        # out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
+        # out = Dropout(self.dropout_rate)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
         model = keras.Model(inputs=x, outputs=out)
         return model
