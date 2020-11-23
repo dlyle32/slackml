@@ -3,6 +3,7 @@ from tensorflow import keras
 from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
+from tensorflow.keras.optimizers.schedules import ExponentialDecay
 import numpy as np
 import random
 import math
@@ -137,7 +138,10 @@ def main(args):
 
     optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
     optimizer = optimizer_map[args.optimizer] if args.optimizer in optimizer_map.keys() else RMSprop
-    opt = optimizer(learning_rate=args.learningrate, clipvalue=3)
+    lr_decay = ExponentialDecay(initial_learning_rate=args.learningrate,
+                                decay_rate=args.decayrate,
+                                decay_steps=args.decaysteps)
+    opt = optimizer(learning_rate=lr_decay, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
 
     model.summary(print_fn=logger.info)
@@ -200,6 +204,8 @@ def parse_args():
     parser.add_argument("--savetokens", action="store_true")
     parser.add_argument("--embedding", action="store_true")
     parser.add_argument("--optimizer", default="rmsprop")
+    parser.add_argument("--decaysteps", type=int, default=10000)
+    parser.add_argument("--decayrate", type=float, default=1.0)
     return parser.parse_args()
 
 if __name__=="__main__":
