@@ -25,6 +25,7 @@ class PerMessageLanguageModelBuilder:
         self.minlen = args.minlength
         self.maxlen = args.maxlength
         self.embedding = args.embedding
+        self.embeddingsize = args.embeddingsize
 
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -79,7 +80,7 @@ class PerMessageLanguageModelBuilder:
         tf.keras.backend.set_floatx('float64')
         if self.embedding:
             x = Input(shape=(self.seqlen), name="input")
-            out = Embedding(vocab_size, 256, input_length=self.seqlen)(x)
+            out = Embedding(vocab_size, self.embeddingsize, input_length=self.seqlen)(x)
             out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         else:
             x = Input(shape=(self.seqlen, vocab_size), name="input")

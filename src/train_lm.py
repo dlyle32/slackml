@@ -203,6 +203,7 @@ def parse_args():
     parser.add_argument("--fillseqs", action="store_true")
     parser.add_argument("--savetokens", action="store_true")
     parser.add_argument("--embedding", action="store_true")
+    parser.add_argument("--embeddingsize", type=int, default=100)
     parser.add_argument("--optimizer", default="rmsprop")
     parser.add_argument("--decaysteps", type=int, default=10000)
     parser.add_argument("--decayrate", type=float, default=1.0)
