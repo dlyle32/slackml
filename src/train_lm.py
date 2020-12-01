@@ -106,7 +106,7 @@ def main(args):
 
 
     timestamp = int(time.time())
-    logdir = os.path.join(args.volumedir, args.logdir, datetime.datetime.today().strftime('%Y%m%d'))
+    logdir = os.path.join(args.volumedir, datetime.datetime.today().strftime('%Y%m%d'), args.logdir)
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
     hdlr = logging.FileHandler(os.path.join(logdir, "training_output_%d.log" % timestamp))
@@ -115,7 +115,7 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
 
-    checkpointdir = os.path.join(args.volumedir, args.checkpointdir, datetime.datetime.today().strftime('%Y%m%d'))
+    checkpointdir = os.path.join(args.volumedir, datetime.datetime.today().strftime('%Y%m%d'), args.checkpointdir)
     if not os.path.isdir(checkpointdir):
         os.makedirs(checkpointdir)
 
