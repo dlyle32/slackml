@@ -12,7 +12,7 @@ import time
 import os
 import argparse
 import logging
-from data.load import load_datasets
+from data.load import load_datasets, load_context_target_pairs
 
 logger = logging.getLogger('keras_char_lm')
 
@@ -93,7 +93,8 @@ def load_tokens(checkpointdir, timestamp):
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
-    train, test = load_datasets(datadir)
+    # train, test = load_datasets(datadir)
+    train, test = load_context_target_pairs(datadir)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
     train = train[:min(len(train), args.datacap)]
 
@@ -165,8 +166,9 @@ def main(args):
         logger.info("Epoch %d: %s" % (epoch, str(metrics)))
         valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs, args.minibatchsize)
         logger.info("Validation metrics %s" % str(valmetrics))
-        sample_output = sample_func()
-        logger.info("\n" + sample_output)
+        if args.runsamples:
+            sample_output = sample_func()
+            logger.info("\n" + sample_output)
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
 
     # model.fit(X, Y,
@@ -207,6 +209,9 @@ def parse_args():
     parser.add_argument("--optimizer", default="rmsprop")
     parser.add_argument("--decaysteps", type=int, default=10000)
     parser.add_argument("--decayrate", type=float, default=1.0)
+    parser.add_argument("--runsamples", action="store_true")
+    parser.add_argument("--vocabfile", type=str)
+    parser.add_argument("--modelweightspath", type=str)
     return parser.parse_args()
 
 if __name__=="__main__":
