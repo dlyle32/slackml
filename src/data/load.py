@@ -25,7 +25,7 @@ def is_event_valid(event, word_threshold = 2):
     words = event.get("text").split(" ") if event.get("text") != None else []
     return is_user_message and len(words) > word_threshold
 
-def get_user_msg_context(data,i, context_len = 40):
+def get_user_msg_context(data,i, context_len):
     context = []
     while len(context) < context_len and i > 0:
         event = data[i]
@@ -34,25 +34,25 @@ def get_user_msg_context(data,i, context_len = 40):
         i -= 1
     return " ".join(context)
 
-def process_file_context_target(fname, target_user):
+def process_file_context_target(fname, target_user, context_len):
     msgs_with_context = []
     with open(fname, 'r') as fp:
         data = json.load(fp)
         for i, event in enumerate(data):
             if is_event_valid(event, word_threshold=0) and event["user"] == target_user:
-                context = get_user_msg_context(data, i-1)
+                context = get_user_msg_context(data, i-1, context_len)
                 target_msg = event["text"] + "\n"
                 if len(context) <= 1:
                     continue
                 msgs_with_context.append((context, target_msg))
     return msgs_with_context
 
-def load_context_target_pairs(datadir, training_threshold=0.9):
+def load_context_target_pairs(datadir, training_threshold=0.9, context_len = 40):
     context_target_pairs = []
     for r, d, f in os.walk(datadir):
         for file in f:
             fname = os.path.join(r,file)
-            pairs = process_file_context_target(fname, target_user="U0AR782AV")
+            pairs = process_file_context_target(fname, "U0AR782AV", context_len)
             context_target_pairs.extend(pairs)
     return context_target_pairs, []
 

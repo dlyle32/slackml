@@ -94,7 +94,7 @@ def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
     # train, test = load_datasets(datadir)
-    train, test = load_context_target_pairs(datadir)
+    train, test = load_context_target_pairs(datadir, context_len = args.conlength)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
     train = train[:min(len(train), args.datacap)]
 
