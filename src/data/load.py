@@ -41,7 +41,7 @@ def process_file_context_target(fname, target_user):
         for i, event in enumerate(data):
             if is_event_valid(event, word_threshold=0) and event["user"] == target_user:
                 context = get_user_msg_context(data, i-1)
-                target_msg = event["text"]
+                target_msg = event["text"] + "\n"
                 if len(context) <= 1:
                     continue
                 msgs_with_context.append((context, target_msg))

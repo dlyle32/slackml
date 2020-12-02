@@ -34,7 +34,7 @@ class ContextualLanguageModelBuilder:
         self.n_a = args.hiddensize
         self.step = args.step
         self.seqlen = args.seqlength
-        self.context_len = args.seqlength
+        self.context_len = args.conlength
         self.minlen = args.minlength
         self.maxlen = args.maxlength
         self.embedding = args.embedding
@@ -100,15 +100,22 @@ class ContextualLanguageModelBuilder:
     def sample(self, model, tokens, vocab, reverse_token_map):
         seqlen = self.seqlen
         vocab_size = len(vocab)
+        tf.keras.backend.set_floatx('float64')
 
-        i = random.randint(0, len(tokens) - self.seqlen - 1)
-        context = tokens[i:i+self.seqlen]
+        if(not hasattr(self, "encoder_model") or not hasattr(self, "decoder_model")):
+            self.build_sample_model(model)
+
+        i = random.randint(0, len(tokens))
+        context = tokens[i][0]
+        actual_message = tokens[i][1]
         encoder_input = [get_ix_from_token(reverse_token_map, token) for token in context]
         encoder_input = [token_to_oh(ix, len(vocab)) for ix in encoder_input]
+        encoder_input = np.array([encoder_input])
         encoder_state = self.encoder_model.predict(encoder_input)
 
         inpt = ["START" for i in range(self.seqlen)]
         output = ""
+        token_ix = -1
         mintokens = 15
         maxtokens = 100
         i = 0
@@ -119,9 +126,11 @@ class ContextualLanguageModelBuilder:
             else:
                 x = np.zeros((1, seqlen, vocab_size))
                 x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
-            preds = self.decoder_model.predict([x] + encoder_state, verbose=0)[0][min(i,self.seqlen-1)]
-            token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
-            while token_ix == reverse_token_map["<UNK>"]:
+            preds = self.decoder_model.predict([x] + encoder_state, verbose=0)[0]
+            preds = preds[0][min(i,self.seqlen-1)]
+            probs = preds.ravel()
+            token_ix = np.random.choice(range(vocab_size), p=probs)
+            while token_ix == reverse_token_map["<UNK>"] or (token_ix == reverse_token_map[" "] and output[-1] == " "):
                 token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
@@ -133,6 +142,9 @@ class ContextualLanguageModelBuilder:
 
         print(context)
         print(output)
+        print(actual_message)
+        print(actual_message[-1] == "\n")
+        print(len(output))
         return output
 
     def get_input_sequences(self, tokens, reverse_token_map, full=True, sliding_window=True):

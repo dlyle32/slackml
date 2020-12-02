@@ -193,6 +193,7 @@ def parse_args():
     parser.add_argument("--minibatchsize", type=int, default=256)
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
+    parser.add_argument("--conlength", type=int, default=40)
     parser.add_argument("--minlength", type=int, default=15)
     parser.add_argument("--maxlength", type=int, default=200)
     parser.add_argument("--learningrate", type=float, default=0.01)
