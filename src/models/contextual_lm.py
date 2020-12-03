@@ -62,16 +62,15 @@ class ContextualLanguageModelBuilder:
         tf.keras.backend.set_floatx('float64')
 
         encoder_input = Input(shape=(None, vocab_size), name="encoder_input")
-        encoder_lstm = LSTM(self.n_a, return_state=True)
+        encoder_lstm = LSTM(self.n_a, return_state=True, kernel_regularizer=reg, recurrent_regularizer=reg)
         encoder_output, state_h, state_c =encoder_lstm(encoder_input)
         encoder_states = [state_h, state_c]
 
         decoder_lstm_weights = get_lstm_weights(self.modelweightspath)
         decoder_input = Input(shape=(None, vocab_size), name="decoder_input")
         decoder_lstm = LSTM(self.n_a, weights=decoder_lstm_weights, return_sequences=True, return_state=True, kernel_regularizer=reg, recurrent_regularizer=reg)
-        #decoder_lstm.set_weights(decoder_lstm_weights)
         decoder_output, _, _ = decoder_lstm(decoder_input, initial_state=encoder_states)
-        #decoder_output = Dropout(self.dropout_rate)(decoder_output)
+        decoder_output = Dropout(self.dropout_rate)(decoder_output)
         decoder_dense = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)
         decoder_output = decoder_dense(decoder_output)
 
