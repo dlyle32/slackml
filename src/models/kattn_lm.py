@@ -204,6 +204,7 @@ loss_fn = keras.losses.SparseCategoricalCrossentropy(
             reduction=tf.keras.losses.Reduction.NONE
         )
 loss_tracker = tf.keras.metrics.Mean(name="loss")
+accr_tracker = tf.keras.metrics.Accuracy(name="accuracy")
 class MaskedLanguageModel(tf.keras.Model):
     def train_step(self, inputs):
         if len(inputs) == 3:
@@ -225,9 +226,10 @@ class MaskedLanguageModel(tf.keras.Model):
 
         # Compute our own metrics
         loss_tracker.update_state(loss, sample_weight=sample_weight)
+        accr_tracker.update_state(labels, predictions, sample_weight=sample_weight)
 
         # Return a dict mapping metric names to current value
-        return {"loss": loss_tracker.result()}
+        return {"loss": loss_tracker.result(), "accuracy": accr_tracker.result()}
 
     def test_step(self, inputs):
         if len(inputs) == 3:
@@ -239,7 +241,9 @@ class MaskedLanguageModel(tf.keras.Model):
         predictions = self(features, training=False)
         loss = loss_fn(labels, predictions, sample_weight=sample_weight)
         loss_tracker.update_state(loss, sample_weight=sample_weight)
-        return {"loss": loss_tracker.result()}
+        accr_tracker.update_state(labels, predictions, sample_weight=sample_weight)
+
+        return {"loss": loss_tracker.result(), "accuracy": accr_tracker.result()}
 
 
     @property
