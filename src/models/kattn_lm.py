@@ -204,7 +204,7 @@ loss_fn = keras.losses.SparseCategoricalCrossentropy(
             reduction=tf.keras.losses.Reduction.NONE
         )
 loss_tracker = tf.keras.metrics.Mean(name="loss")
-accr_tracker = tf.keras.metrics.Accuracy(name="accuracy")
+accr_tracker = tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")
 class MaskedLanguageModel(tf.keras.Model):
     def train_step(self, inputs):
         if len(inputs) == 3:
