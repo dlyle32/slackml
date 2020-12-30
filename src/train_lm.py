@@ -4,6 +4,7 @@ from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogge
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import math
@@ -62,8 +63,13 @@ def evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, data, m
     batches = rand_mini_batches(data, mini_batch_size)
     metrics = {}
     for i, batch in enumerate(batches):
-        X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
-        metrics = model.test_on_batch(X, Y, reset_metrics=i == 0, return_dict=True)
+        X, Y, sample_weight = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
+        metrics = model.test_on_batch(X, Y, sample_weight= sample_weight, reset_metrics=i == 0, return_dict=True)
+    for key in metrics.keys():
+        if "val_" in key:
+           continue
+        metrics["val_" + key] = metrics[key]
+        del metrics[key]
     return metrics
 
 def save_vocab(vocab, checkpointsdir, timestamp):
@@ -90,11 +96,28 @@ def load_tokens(checkpointdir, timestamp):
         tokens = fp.read().split("\t")
     return tokens
 
+def plot_history(metrics, lr, logdir, timestamp):
+    plt.plot(np.squeeze(metrics["loss"]),"b")
+    plt.plot(np.squeeze(metrics["val_loss"]),"r")
+    plt.ylabel('loss')
+    plt.xlabel('iterations')
+    plt.title("Learning rate =" + str(lr))
+    lossfname = os.path.join(logdir, "model_loss_%d.png" % timestamp)
+    plt.savefig(lossfname)
+    if "accuracy" not in metrics.keys():
+        return
+    plt.plot(np.squeeze(metrics["accuracy"]), "b")
+    plt.ylabel('accuracy')
+    plt.xlabel('iterations')
+    plt.title("Learning rate =" + str(lr))
+    accrfname = os.path.join(logdir, "model_accuracy_%d.png" % timestamp)
+    plt.savefig(accrfname)
+
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
-    # train, test = load_datasets(datadir)
-    train, test = load_context_target_pairs(datadir, context_len = args.conlength)
+    train, test = load_datasets(datadir)
+    # train, test = load_context_target_pairs(datadir, context_len = args.conlength)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
     train = train[:min(len(train), args.datacap)]
 
@@ -151,25 +174,35 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map, full=args.fillseqs)
+    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
     trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
-    metrics = {}
+    allmetrics = {}
     for epoch in range(init_epoch, args.numepochs):
         batches = rand_mini_batches(trainseqs, args.minibatchsize)
         for i, batch in enumerate(batches):
-            X, Y = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
-            metrics = model.train_on_batch(X, Y, reset_metrics = i==0, return_dict=True)
+            X, Y, sample_weights = modelBuilder.build_input_vectors(batch, vocab, reverse_token_map)
+            metrics = model.train_on_batch(X, Y, sample_weight=sample_weights, reset_metrics = i==0, return_dict=True)
             if i % 100 == 0:
+                valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs,
+                                                   args.minibatchsize)
+                metrics.update(valmetrics)
+                for key in metrics.keys():
+                    if key in allmetrics.keys():
+                        allmetrics[key] += [metrics[key]]
+                    else:
+                        allmetrics[key] = [metrics[key]]
                 print("Batch %d of %d in epoch %d: %s" % (i, len(batches), epoch, str(metrics)))
         logger.info("Epoch %d: %s" % (epoch, str(metrics)))
-        valmetrics = evaluate_mini_batches(model, modelBuilder, vocab, reverse_token_map, valseqs, args.minibatchsize)
-        logger.info("Validation metrics %s" % str(valmetrics))
+        # logger.info("Validation metrics %s" % str(valmetrics))
         if args.runsamples:
             sample_output = sample_func()
             logger.info("\n" + sample_output)
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
+    plot_history(allmetrics, args.learningrate, logdir, timestamp)
+    for i in range(10):
+        sample_func()
 
     # model.fit(X, Y,
     #            batch_size=args.minibatchsize,
