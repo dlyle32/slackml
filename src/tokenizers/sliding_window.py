@@ -9,7 +9,7 @@ class SlidingWindowTokenizer:
         self.tokenizer = nltk.RegexpTokenizer("\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
     def tokenize(self, data):
-        tokens = self.tokenizer.tokenize("START ".join(data))
+        tokens = self.tokenizer.tokenize("<START> ".join(data))
         token_counts = {}
         for t in tokens:
             if t not in token_counts.keys():
@@ -18,7 +18,7 @@ class SlidingWindowTokenizer:
                 token_counts[t] += 1
         freq_filtered = filter(lambda elem: elem[1] >= self.freq_threshold, token_counts.items())
         vocab = sorted([elem[0] for elem in list(freq_filtered)])
-        vocab += ["<MASK>","<UNK>"]
+        vocab += ["<MASK>","<UNK>","<START>"]
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
         return tokens, vocab, reverse_token_map
 

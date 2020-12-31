@@ -177,11 +177,12 @@ class AttentionModelBuilder:
         vocab_size = len(vocab)
         token_ix = -1
         inpt = ["<MASK>" for i in range(self.seqlen)]
+        inpt[0] = "<START>"
         output = ""
         mintokens = 15
         maxtokens = 100
-        i = 0
-        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['START']):
+        i = 1
+        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             maskix = min(i, self.seqlen - 1)
             # x = np.zeros((1, seqlen))
             x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
