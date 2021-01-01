@@ -25,8 +25,10 @@ class SlidingWindowTokenizer:
     def get_input_sequences(self, tokens, reverse_token_map):
         seqs = []
         for i in range(0, len(tokens) - self.seqlen, self.step):
+            x0 = "START" if i == 0 else tokens[i - 1]
             last_ix = min(i + self.seqlen, len(tokens) - 1)
             padded_sequence = char_padded(tokens[i:last_ix], " ", self.seqlen)
-            Xseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
-            seqs.append(Xseq)
+            Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
+            Xseq = [get_ix_from_token(reverse_token_map, x0)] + Yseq[:-1]
+            seqs.append((Xseq, Yseq))
         return seqs

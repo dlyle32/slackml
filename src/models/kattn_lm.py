@@ -26,7 +26,7 @@ def attention_head(q, k, v, dropout, mask=None):
     # use perm to transpose final two dimensions of key vector
     attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
     if mask is not None:
-        attn_factor[mask] == -1e9
+        attn_factor[mask == False] == -1e9
     attn_factor = keras.layers.Softmax()(attn_factor)
     attn_factor = keras.layers.Dropout(dropout)(attn_factor)
     return tf.matmul(attn_factor, v), attn_factor
@@ -80,6 +80,7 @@ class AttentionModelBuilder:
         self.maxlen = args.maxlength
         self.embedding = args.embedding
         self.embeddingsize = args.embeddingsize
+        self.ffdim = args.ffdim
 
         self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
 
@@ -119,19 +120,29 @@ class AttentionModelBuilder:
     def get_input_sequences(self, tokens, reverse_token_map):
         return self.tokenizer.get_input_sequences(tokens,reverse_token_map)
 
-    def build_input_vectors(self, seqs, vocab, reverse_token_map):
+    def build_masked_input_vectors(self, seqs, vocab, reverse_token_map):
         mask_token_ix = reverse_token_map["<MASK>"]
         seqs = np.asarray(seqs)
         masked_ds, masked_y, sample_weights = self.get_masked_datasets(seqs, mask_token_ix, len(vocab))
         return masked_ds, masked_y, sample_weights
 
+    def build_input_vectors(self, seqs, vocab, reverse_token_map):
+        X = np.zeros((len(seqs), self.seqlen))
+        Y = np.zeros((len(seqs), self.seqlen))
+
+        for i, (Xseq, Yseq) in enumerate(seqs):
+            X[i, :] = Xseq
+            Y[i, :] = Yseq
+        return X,Y, None
+
+
     def transformer_encoder(self, x, i, reg, mask=None):
         # Embedding, self-attention, dropout, residual layerNorm, ffn, residual layerNorm
         m = tf.shape(x)[0]
 
-        attn_layer = keras.layers.MultiHeadAttention(4, self.n_a//4)
-        attn_out = attn_layer(x,x,x, attention_mask=mask)
-        # attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        # attn_layer = keras.layers.MultiHeadAttention(4, self.n_a//4)
+        # attn_out = attn_layer(x,x,x, attention_mask=mask)
+        attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
         #     attn_out = tf.reshape(out, (m,seqlen*n_a))
 
         x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x + attn_out)
@@ -139,7 +150,7 @@ class AttentionModelBuilder:
         # Feed-forward layer
         ffn = keras.Sequential(
             [
-                keras.layers.Dense(self.n_a, kernel_regularizer=reg, activation="relu"),
+                keras.layers.Dense(self.ffdim, kernel_regularizer=reg, activation="relu"),
                 keras.layers.Dense(self.n_a, kernel_regularizer=reg),
             ],
             name="encoder_{}/ffn".format(i),
@@ -151,12 +162,52 @@ class AttentionModelBuilder:
         x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/ffn_norm".format(i))(x + ffn_out)
         return x
 
-    def create_model(self, vocab):
+    def subsequent_mask(self, shape):
+        "Mask out subsequent positions."
+        subsequent_mask = np.triu(np.ones(shape), k=1).astype('uint8')
+        return subsequent_mask == 0
+
+    def transformer_decoder(self, encoder_out, targets, reg, mask=None):
+        # Embedding, self attention, encoder attention, dropout, residual layerNorm, ffn, dropout, res norm, dense softmax
+        m = tf.shape(x)[0]
+
+        attn_layer_1 = keras.layers.MultiHeadAttention(4, self.n_a // 4)
+        attn_out_1 = attn_layer_1(targets, targets, targets, attention_mask=mask)
+        # attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        #     attn_out = tf.reshape(out, (m,seqlen*n_a))
+
+        attn_out_1 = keras.layers.LayerNormalization(epsilon=1e-6, name="decoder/attn_norm_1")(targets + attn_out_1)
+
+        attn_layer_2 = keras.layers.MultiHeadAttention(4, self.n_a // 4)
+        attn_out_2 = attn_layer_2(encoder_out, attn_out_1, attn_out_1, attention_mask=mask)
+        # attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        #     attn_out = tf.reshape(out, (m,seqlen*n_a))
+
+        attn_out_2 = keras.layers.LayerNormalization(epsilon=1e-6, name="decoder/attn_norm_2")(attn_out_1 + attn_out_2)
+
+        # Feed-forward layer
+        ffn = keras.Sequential(
+            [
+                keras.layers.Dense(self.n_a, kernel_regularizer=reg, activation="relu"),
+                keras.layers.Dense(self.n_a, kernel_regularizer=reg),
+            ],
+            name="decoder/ffn",
+        )
+
+        ffn_out = ffn(attn_out_2)
+        ffn_out = keras.layers.Dropout(self.dropout_rate, name="decoder/ffn_dropout")(ffn_out)
+
+        x = keras.layers.LayerNormalization(epsilon=1e-6, name="decoder/ffn_norm")(attn_out_2 + ffn_out)
+        return x
+
+    def create_model(self, vocab, mask=None):
         vocab_size = len(vocab)
         reg = keras.regularizers.l2(self.reg_factor)
 
         inpt = keras.layers.Input(shape=(self.seqlen), name="input")
+        targets = keras.layers.Input(shape=(self.seqlen), name="targets")
         out = keras.layers.Embedding(vocab_size, self.n_a, input_length=self.seqlen)(inpt)
+        target_emb = keras.layers.Embedding(vocab_size, self.n_a, input_length=self.seqlen)(targets)
         pos_enc = positional_encoding(self.seqlen, self.n_a)
         pos_emb = keras.layers.Embedding(
             input_dim=self.seqlen,
@@ -165,16 +216,49 @@ class AttentionModelBuilder:
             name="position_embedding",
         )(tf.range(start=0, limit=self.seqlen, delta=1))
         encoder_out = out + pos_emb
+        target_emb = target_emb + pos_emb
         m = tf.shape(out)[0]
+        mask = self.subsequent_mask(self.seqlen)
         for i in range(5):
-            encoder_out = self.transformer_encoder(out, i, reg)
-        masked_out = keras.layers.Dense(self.n_a, activation="relu", kernel_regularizer=reg)(encoder_out)
-        masked_out = keras.layers.Dense(vocab_size, activation="softmax", kernel_regularizer=reg)(masked_out)
+            encoder_out = self.transformer_encoder(out, i, reg, mask)
+        # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
+        out = keras.layers.Dense(self.n_a, activation="relu", kernel_regularizer=reg)(encoder_out)
+        out = keras.layers.Dense(vocab_size, activation="softmax", kernel_regularizer=reg)(out)
 
-        masked_model = MaskedLanguageModel(inputs=inpt, outputs=masked_out)
-        return masked_model
+        # masked_model = MaskedLanguageModel(inputs=inpt, outputs=masked_out)
+        # return masked_model
+
+        model = keras.Model(inputs=inpt, outputs=out)
+        return model
 
     def sample(self, model, tokens, vocab, reverse_token_map):
+        seqlen = self.seqlen
+        vocab_size = len(vocab)
+        token_ix = -1
+        inpt = ["<START>" for i in range(self.seqlen)]
+        output = ""
+        mintokens = 15
+        maxtokens = 100
+        i = 1
+        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
+            # x = np.zeros((1, seqlen))
+            x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+            x = np.asarray(x)
+            x = x.reshape((1,seqlen))
+            preds = model.predict(x, verbose=0)[0][min(i, self.seqlen - 1)]
+            token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+            while token_ix == reverse_token_map["<UNK>"]:
+                token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+            new_token = vocab[token_ix]
+            output += new_token
+            if (i + 1 < len(inpt)):
+                inpt[i + 1] = new_token
+            else:
+                inpt = inpt[1:] + [new_token]
+            i += 1
+        return output
+
+    def masked_sample(self, model, tokens, vocab, reverse_token_map):
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
