@@ -201,7 +201,7 @@ def main(args):
             sample_output = sample_func()
             logger.info("\n" + sample_output)
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
-    plot_history(allmetrics, args.learningrate, logdir, timestamp)
+        plot_history(allmetrics, args.learningrate, logdir, timestamp)
     for i in range(10):
         sample_output = sample_func()
         logger.info("\n" + sample_output)
