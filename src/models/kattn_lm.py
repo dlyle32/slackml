@@ -219,7 +219,7 @@ class AttentionModelBuilder:
         target_emb = target_emb + pos_emb
         m = tf.shape(out)[0]
         mask = self.subsequent_mask(self.seqlen)
-        for i in range(5):
+        for i in range(6):
             encoder_out = self.transformer_encoder(encoder_out, i, reg, mask)
         # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
         out = keras.layers.Dense(self.n_a, activation="relu", kernel_regularizer=reg)(encoder_out)
