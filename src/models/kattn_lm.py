@@ -81,6 +81,8 @@ class AttentionModelBuilder:
         self.embedding = args.embedding
         self.embeddingsize = args.embeddingsize
         self.ffdim = args.ffdim
+        self.transformer_layers = args.transformer_layers
+        self.attention_heads = args.attention_heads
 
         self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
 
@@ -140,7 +142,7 @@ class AttentionModelBuilder:
         # Embedding, self-attention, dropout, residual layerNorm, ffn, residual layerNorm
         m = tf.shape(x)[0]
 
-        attn_layer = keras.layers.MultiHeadAttention(4, self.n_a//4)
+        attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
         attn_out = attn_layer(x,x,x, attention_mask=mask)
         # attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
         #     attn_out = tf.reshape(out, (m,seqlen*n_a))
@@ -219,7 +221,7 @@ class AttentionModelBuilder:
         target_emb = target_emb + pos_emb
         m = tf.shape(out)[0]
         mask = self.subsequent_mask(self.seqlen)
-        for i in range(6):
+        for i in range(self.transformer_layers):
             encoder_out = self.transformer_encoder(encoder_out, i, reg, mask)
         # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
         out = keras.layers.Dense(self.n_a, activation="relu", kernel_regularizer=reg)(encoder_out)

@@ -226,6 +226,8 @@ def parse_args():
     parser.add_argument("--step", type=int, default=5)
     parser.add_argument("--hiddensize", type=int, default=128)
     parser.add_argument("--ffdim", type=int, default=256)
+    parser.add_argument("--attention_heads", type=int, default=4)
+    parser.add_argument("--transformer_layers", type=int, default=5)
     parser.add_argument("--minibatchsize", type=int, default=256)
     parser.add_argument("--numepochs", type=int, default=25)
     parser.add_argument("--seqlength", type=int, default=40)
