@@ -142,9 +142,9 @@ class AttentionModelBuilder:
         # Embedding, self-attention, dropout, residual layerNorm, ffn, residual layerNorm
         m = tf.shape(x)[0]
 
-        attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
-        attn_out = attn_layer(x,x,x, attention_mask=mask)
-        # attn_out = multihead_attention(x, x, x, 4, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        # attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
+        # attn_out = attn_layer(x,x,x, attention_mask=mask)
+        attn_out = multihead_attention(x, x, x, self.attention_heads, self.n_a, m, reg, self.dropout_rate, mask=mask)
         #     attn_out = tf.reshape(out, (m,seqlen*n_a))
 
         x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x + attn_out)
