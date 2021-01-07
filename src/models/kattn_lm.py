@@ -224,7 +224,7 @@ class AttentionModelBuilder:
         for i in range(self.transformer_layers):
             encoder_out = self.transformer_encoder(encoder_out, i, reg, mask)
         # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
-        out = keras.layers.Dense(self.n_a, activation="relu", kernel_regularizer=reg)(encoder_out)
+        out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg)(encoder_out)
         out = keras.layers.Dense(vocab_size, activation="softmax", kernel_regularizer=reg)(out)
 
         # masked_model = MaskedLanguageModel(inputs=inpt, outputs=masked_out)
