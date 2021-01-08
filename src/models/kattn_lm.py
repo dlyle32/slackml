@@ -18,13 +18,15 @@ from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_pad
 def attention_head(q, k, v, dropout, mask=None):
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
     dk = k.shape[-1]
+    dk = tf.cast(tf.shape(k)[-1], tf.float32)
     ndim = len(k.shape)
     perm = list(range(ndim))
     perm[-2] = ndim - 1
     perm[-1] = ndim - 2
 
     # use perm to transpose final two dimensions of key vector
-    attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
+    # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
+    attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
         attn_factor[mask == False] == -1e9
     attn_factor = keras.layers.Softmax()(attn_factor)
