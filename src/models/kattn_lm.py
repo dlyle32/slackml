@@ -28,7 +28,9 @@ def attention_head(q, k, v, dropout, mask=None):
     # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
     attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
-        attn_factor[mask == False] == -1e9
+        # attn_factor[mask == False] = -1e9
+        mask = mask == False
+        attn_factor = (mask * -1e9)
     attn_factor = keras.layers.Softmax()(attn_factor)
     attn_factor = keras.layers.Dropout(dropout)(attn_factor)
     return tf.matmul(attn_factor, v), attn_factor
@@ -40,9 +42,6 @@ def multihead_attention(q, k, v, h, n_a, m, reg, dropout, mask=None):
     Wk = keras.layers.Dense(n_a, kernel_regularizer=reg)
     Wv = keras.layers.Dense(n_a, kernel_regularizer=reg)
     Wo = keras.layers.Dense(n_a, kernel_regularizer=reg)
-    if mask is not None:
-        mask = tf.expand_dims(mask, 1)
-        mask = tf.repeat(mask, 4, 1)
 
     seqlen = q.shape[1]
     shape = [m, seqlen, h, dim]
