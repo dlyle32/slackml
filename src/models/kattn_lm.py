@@ -7,6 +7,7 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
+from tensorflow.python.ops import special_math_ops
 import numpy as np
 import nltk
 from tokenizers.sliding_window import SlidingWindowTokenizer
@@ -15,7 +16,35 @@ import math
 import logging
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 
+def einsum_attn(q,k,v, dropout, mask):
+    dot = "aecd,abcd->acbe"
+    com = "acbe,aecd->abcd"
+    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+    ndim = len(k.shape)
+    perm = list(range(ndim))
+    perm[-2] = ndim - 1
+    perm[-1] = ndim - 2
+
+    # use perm to transpose final two dimensions of key vector
+    # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
+    attn_factor = special_math_ops.einsum(dot, k, q)
+    attn_factor = attn_factor / tf.math.sqrt(dk)
+    # attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
+    if mask is not None:
+        # attn_factor[mask == False] = -1e9
+        mask = mask == False
+        attn_factor += (mask * -1e9)
+    attn_factor = keras.layers.Softmax()(attn_factor)
+    attn_factor = keras.layers.Dropout(dropout)(attn_factor)
+    print(attn_factor.shape)
+    print(v.shape)
+    C = special_math_ops.einsum(com, attn_factor, v)
+    print(C.shape)
+    return C, attn_factor
+
+
 def attention_head(q, k, v, dropout, mask=None):
+    return einsum_attn(q,k,v, dropout, mask)
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
     dk = k.shape[-1]
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -47,9 +76,9 @@ def multihead_attention(q, k, v, h, n_a, m, reg, dropout, mask=None):
     shape = [m, seqlen, h, dim]
     Q = Wq(q)
     Q = tf.reshape(Q, shape)
-    Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
-    K = tf.transpose(tf.reshape(Wk(k), shape), perm=[0, 2, 1, 3])
-    V = tf.transpose(tf.reshape(Wv(v), shape), perm=[0, 2, 1, 3])
+    Q = tf.transpose(Q, perm=[0, 1, 2, 3]) # reshape for heads x seqlen x model_dim
+    K = tf.transpose(tf.reshape(Wk(k), shape), perm=[0, 1, 2, 3])
+    V = tf.transpose(tf.reshape(Wv(v), shape), perm=[0, 1, 2, 3])
 
     C, attn_factor = attention_head(Q, K, V, dropout, mask)
     C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (m, seqlen, n_a))
