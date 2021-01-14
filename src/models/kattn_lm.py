@@ -16,6 +16,8 @@ import math
 import logging
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 
+logger = logging.getLogger('keras_char_lm')
+
 def einsum_attn(q,k,v, dropout, mask):
     dot = "aecd,abcd->acbe"
     com = "acbe,aecd->abcd"
@@ -76,9 +78,9 @@ def multihead_attention(q, k, v, h, n_a, m, reg, dropout, mask=None):
     shape = [m, seqlen, h, dim]
     Q = Wq(q)
     Q = tf.reshape(Q, shape)
-    Q = tf.transpose(Q, perm=[0, 1, 2, 3]) # reshape for heads x seqlen x model_dim
-    K = tf.transpose(tf.reshape(Wk(k), shape), perm=[0, 1, 2, 3])
-    V = tf.transpose(tf.reshape(Wv(v), shape), perm=[0, 1, 2, 3])
+    #Q = tf.transpose(Q, perm=[0, 1, 2, 3]) # reshape for heads x seqlen x model_dim
+    K = tf.reshape(Wk(k), shape)
+    V = tf.reshape(Wv(v), shape)
 
     C, attn_factor = attention_head(Q, K, V, dropout, mask)
     C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (m, seqlen, n_a))
@@ -263,25 +265,42 @@ class AttentionModelBuilder:
         model = keras.Model(inputs=inpt, outputs=out)
         return model
 
-    def sample(self, model, tokens, vocab, reverse_token_map):
+    def sample(self, model, tokens, vocab, reverse_token_map, temp=1):
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
-        inpt = ["<START>" for i in range(self.seqlen)]
+        start = np.random.randint(0, len(tokens) - self.seqlen)
+        inpt = tokens[start:start+self.seqlen]
+        x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+        x = np.asarray(x)
+        x = x.reshape((1, seqlen))
+        preds = model.predict(x, verbose=0)[0]
+        for j in range(self.seqlen):
+            p = preds[j]
+            top5 = tf.math.top_k(p, k=5)
+            top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
+            logger.info(top5)
+        #inpt = ["<START>" for i in range(self.seqlen)]
         output = ""
         mintokens = 15
         maxtokens = 100
         i = 1
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             # x = np.zeros((1, seqlen))
+            logger.info(inpt)
             x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
             x = np.asarray(x)
             x = x.reshape((1,seqlen))
-            preds = model.predict(x, verbose=0)[0][min(i, self.seqlen - 1)]
+            preds = model.predict(x, verbose=0)[0]
+            preds = preds[min(i, self.seqlen - 1)]
+            # topk = tf.math.top_k(preds, k=50)
+            # topk_preds = keras.layers.Softmax()(topk.values/temp)
+            # token_ix = np.random.choice(topk.indices, p=topk_preds)
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             while token_ix == reverse_token_map["<UNK>"]:
                 token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
+            logger.info(new_token)
             output += new_token
             if (i + 1 < len(inpt)):
                 inpt[i + 1] = new_token

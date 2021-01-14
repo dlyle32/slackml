@@ -6,7 +6,7 @@ class SlidingWindowTokenizer:
         self.freq_threshold=freq_threshold
         self.seqlen = seqlen
         self.step = step
-        self.tokenizer = nltk.RegexpTokenizer("\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
+        self.tokenizer = nltk.RegexpTokenizer("\<START\>|\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
     def tokenize(self, data):
         tokens = self.tokenizer.tokenize("<START> ".join(data))
@@ -25,7 +25,7 @@ class SlidingWindowTokenizer:
     def get_input_sequences(self, tokens, reverse_token_map):
         seqs = []
         for i in range(0, len(tokens) - self.seqlen, self.step):
-            x0 = "START" if i == 0 else tokens[i - 1]
+            x0 = "<START>" if i == 0 else tokens[i - 1]
             last_ix = min(i + self.seqlen, len(tokens) - 1)
             padded_sequence = char_padded(tokens[i:last_ix], " ", self.seqlen)
             Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
