@@ -284,7 +284,7 @@ class AttentionModelBuilder:
         output = ""
         mintokens = 15
         maxtokens = 100
-        i = 1
+        i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             # x = np.zeros((1, seqlen))
             logger.info(inpt)
