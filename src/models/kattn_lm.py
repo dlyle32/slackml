@@ -269,25 +269,25 @@ class AttentionModelBuilder:
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
-        start = np.random.randint(0, len(tokens) - self.seqlen)
-        inpt = tokens[start:start+self.seqlen]
-        x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
-        x = np.asarray(x)
-        x = x.reshape((1, seqlen))
-        preds = model.predict(x, verbose=0)[0]
-        for j in range(self.seqlen):
-            p = preds[j]
-            top5 = tf.math.top_k(p, k=5)
-            top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
-            logger.info(top5)
-        #inpt = ["<START>" for i in range(self.seqlen)]
+        # start = np.random.randint(0, len(tokens) - self.seqlen)
+        # inpt = tokens[start:start+self.seqlen]
+        # x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+        # x = np.asarray(x)
+        # x = x.reshape((1, seqlen))
+        # preds = model.predict(x, verbose=0)[0]
+        # for j in range(self.seqlen):
+        #     p = preds[j]
+        #     top5 = tf.math.top_k(p, k=5)
+        #     top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
+        #     logger.info(top5)
+        inpt = ["<START>" for i in range(self.seqlen)]
         output = ""
         mintokens = 15
         maxtokens = 100
         i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             # x = np.zeros((1, seqlen))
-            logger.info(inpt)
+            # logger.info(inpt)
             x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
             x = np.asarray(x)
             x = x.reshape((1,seqlen))
@@ -297,10 +297,12 @@ class AttentionModelBuilder:
             # topk_preds = keras.layers.Softmax()(topk.values/temp)
             # token_ix = np.random.choice(topk.indices, p=topk_preds)
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
-            while token_ix == reverse_token_map["<UNK>"]:
+            retries = 0
+            while retries < 10 and token_ix == reverse_token_map["<UNK>"]:
                 token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+                retries += 1
             new_token = vocab[token_ix]
-            logger.info(new_token)
+            # logger.info(new_token)
             output += new_token
             if (i + 1 < len(inpt)):
                 inpt[i + 1] = new_token
