@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM, Dropout, Bidirectional, BatchNormalization
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
-from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 import numpy as np
@@ -39,7 +39,7 @@ def create_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.0001):
     out = Dropout(dropout_rate)(out)
     out = LSTM(n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
     out = Dropout(dropout_rate)(out)
-    out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
+    out = TimeDistributed(Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out))
     model = keras.Model(inputs = x, outputs=out)
     opt = Adam(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
@@ -57,9 +57,9 @@ def create_seq2seq_model(chars, n_a, maxlen, lr, dropout_rate=0.2, reg_factor=0.
     out = Dropout(dropout_rate)(out)
     out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
     model = keras.Model(inputs = x, outputs=out)
-    opt = Adam(learning_rate=lr, clipvalue=3)
+    opt = SGD(learning_rate=lr, clipvalue=3)
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
-    model.summary(print_fn=logger.info)
+    print(model.summary())
     return model
 
 def sample_no_seed(train, model, chars, char_to_ix, temperature=1.0):
@@ -71,7 +71,7 @@ def sample_no_seed(train, model, chars, char_to_ix, temperature=1.0):
     char_index = -1
     i = 0
     while char_index != char_to_ix['\n']:
-        x[0] = [char_to_oh(get_ix_from_char(char_to_ix, chars, c), vocab_size) for c in inpt]
+        x[0] = [np.zeros((vocab_size)) if i >= len(inpt) else char_to_oh(get_ix_from_char(char_to_ix, chars, inpt[i]), vocab_size) for i in range(0,maxlen)]
         preds = model.predict(x, verbose=0)[0][i]
         char_index = np.random.choice(range(vocab_size), p = preds.ravel())
         new_char = chars[char_index]
@@ -116,7 +116,7 @@ def on_epoch_end(train, epoch, model, chars, char_to_ix, metrics):
     #print("COMPLETED EPOCH %d" % epoch)
     #for lbl in metrics.keys():
     #    print(lbl + ": " + str(metrics[lbl]))
-    sample_msg = sample(train, model, chars, char_to_ix)
+    sample_msg = sample_no_seed(train, model, chars, char_to_ix)
 
 def on_batch_end(batch, logs, volumedir, timestamp):
     if batch % 100 == 0:
@@ -189,12 +189,17 @@ def format_x_y(maxlen, chars, train, step, char_to_ix):
     return X, Y
 
 def format_x_y_no_seed(maxlen, chars, train, step, char_to_ix):
-    nummsgs = len(train)
+    alldata = "".join(train)
+    nummsgs = math.floor((len(alldata) - maxlen)/step) +1
+    #nummsgs = len(train)
     X = np.zeros((nummsgs, maxlen, len(chars)))
     Y = np.zeros((nummsgs, maxlen, len(chars)))
     msgs = 0
-    for i in range(0, nummsgs, step):
-        data = train[i][:maxlen]
+    #for i in range(0, nummsgs, step):
+    for i in range(0, len(alldata) - maxlen, step):
+        #data = train[i][:maxlen]
+        last_ix = min(i + maxlen, len(alldata) - 1)
+        data = alldata[i:last_ix]
         for t, c in enumerate(data):
             char_index = get_ix_from_char(char_to_ix, chars, c)
             Y[msgs, t, char_index] = 1
@@ -239,7 +244,7 @@ def main(args):
         epoch_number = int(loadmodel.split(".")[2])
         model = load_checkpoint_model(loadmodel)
     else:
-        model = create_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate, reg_factor=reg_factor)
+        model = create_seq2seq_model(chars, n_a, maxlen, learning_rate, dropout_rate=dropout_rate, reg_factor=reg_factor)
         epoch_number = 0
 
     hdlr = logging.FileHandler(os.path.join(volumedir, "training_output_%d.log" % timestamp))
@@ -248,7 +253,7 @@ def main(args):
     logger.addHandler(hdlr)
     logger.setLevel(logging.INFO)
     metrics = []
-    X,Y = format_x_y(maxlen,chars, train, step, char_to_ix)
+    X,Y = format_x_y_no_seed(maxlen,chars, train, step, char_to_ix)
     callbacks = get_callbacks(volumedir, checkpointdir, checkpointnames, chars, char_to_ix, train, model, timestamp)
     model.fit(X,Y,
               batch_size=mini_batch_size,
