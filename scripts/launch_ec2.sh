@@ -1,7 +1,8 @@
 #!/bin/bash
 
+# --image-id ami-0f379761b32319822 \
 aws ec2 run-instances \
-    --image-id ami-0f379761b32319822 \
+    --image-id ami-036cd828894cecf95 \
     --security-group-ids sg-0bf2a99d8db8b698b \
     --count 1 \
     --instance-type m4.xlarge \
