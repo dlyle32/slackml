@@ -49,8 +49,10 @@ if [ $VOLUME_ID ]; then
 		cd slackml
 
 		# Initiate training using the tensorflow_36 conda environment
-		cat training_args.txt | xargs sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow_p36; python src/keras_char_lm.py"
-#		nvidia-docker run -it -v /training/:/training/ -v /home/ubuntu/slackml/:/slackml 763104351884.dkr.ecr.us-east-1.amazonaws.com/tensorflow-training:2.3.0-gpu-py37-cu102-ubuntu18.04 python slackml/src/keras_char_lm.py
+		#sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow2_latest_p37;python src/train_lm.py --numepochs 40 --seqlength 40 --hiddensize 175 --dropoutrate 0.1 --regfactor 0 --datacap 30000 --learningrate 0.001 --minibatchsize 128 --modelbuilder kwlm_per_message.PerMessageLanguageModelBuilder --step 8 --optimizer adam --embedding --embeddingsize 512 --decayrate 0.95 --decaysteps 1000 --loadmodel /training/checkpoints/20201125/nodle_char_model.1606329829.029.h5 "
+#		sudo /home/ubuntu/anaconda3/envs/tensorflow2_latest_p37/bin/pip uninstall -y tensorflow-gpu tensorflow-cpu tensorflow-estimator tensorflow-serving-api
+#		sudo /home/ubuntu/anaconda3/envs/tensorflow2_latest_p37/bin/pip install tf-nightly
+		sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate tensorflow2_latest_p37;  python src/train_lm.py --datadir data/user_msgs/ --numepochs 12 --seqlength 40  --hiddensize 128 --dropoutrate 0.1 --regfactor 0 --datacap 60000 --learningrate 0.001 --minibatchsize 64 --modelbuilder kattn_lm.AttentionModelBuilder --step 8 --optimizer adam --decayrate 0.95 --decaysteps 800  --ffdim 1024 --attention_heads 4 "
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself
