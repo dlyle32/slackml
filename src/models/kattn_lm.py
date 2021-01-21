@@ -8,6 +8,7 @@ from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 from tensorflow.python.ops import special_math_ops
+from tensorflow.python.ops import math_ops
 import numpy as np
 import nltk
 from tokenizers.sliding_window import SlidingWindowTokenizer
@@ -34,8 +35,9 @@ def einsum_attn(i,q,k,v, dropout, mask):
     # attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
         # attn_factor[mask == False] = -1e9
-        mask = mask == False
-        attn_factor += (mask * -1e9)
+        adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
+        # mask = mask == False
+        attn_factor += adder
     attn_factor = keras.layers.Softmax(name="attention_values_%d" % i)(attn_factor)
     attn_factor = keras.layers.Dropout(dropout, name="attention_dropout_%d" % i)(attn_factor)
     print(attn_factor.shape)
