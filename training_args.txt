@@ -1,1 +1,0 @@
---step 5 --hiddensize 128 --minibatchsize 512 --numepochs 60 --seqlength 40 --learningrate 0.01

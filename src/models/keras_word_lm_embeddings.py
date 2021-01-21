@@ -30,7 +30,7 @@ class WordLanguageModelEmbeddingsBuilder:
 
     def tokenize(self, data, freq_threshold=5):
         #tokens = " ".join(data).split(" ")
-        tokens = self.tokenizer.tokenize(" ".join(data))
+        tokens = self.tokenizer.tokenize("START ".join(data))
         token_counts = {}
         for t in tokens:
             if t not in token_counts.keys():
@@ -87,15 +87,12 @@ class WordLanguageModelEmbeddingsBuilder:
         return output
 
     def get_input_sequences(self, tokens, reverse_token_map):
-        nummsgs = math.floor((len(tokens) - self.maxlen) / self.step) + 1
-        j = 0
         seqs = []
         for i in range(0, len(tokens) - self.maxlen, self.step):
             last_ix = min(i + self.maxlen, len(tokens)-1)
             Xseq = [get_ix_from_token(reverse_token_map, token) for token in tokens[i:last_ix]]
             Yix = get_ix_from_token(reverse_token_map, tokens[last_ix])
             seqs.append((Xseq, Yix))
-            j += 1
         return seqs
 
     def build_input_vectors(self, seqs, vocab, reverse_token_map):
