@@ -96,6 +96,31 @@ def load_tokens(checkpointdir, timestamp):
         tokens = fp.read().split("\t")
     return tokens
 
+# Learning rate schedule from Attention is all you need
+# Taken from https://www.tensorflow.org/tutorials/text/transformer
+class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+  def __init__(self, d_model, warmup_steps=4000):
+    super(CustomSchedule, self).__init__()
+
+    self.d_model = d_model
+    self.d_model = tf.cast(self.d_model, tf.float32)
+
+    self.warmup_steps = warmup_steps
+
+  def __call__(self, step):
+    arg1 = tf.math.rsqrt(step)
+    arg2 = step * (self.warmup_steps ** -1.5)
+
+    return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+
+  def get_config(self):
+      config = {
+          'd_model': self.d_model,
+          'warmup_steps': self.warmup_steps,
+
+      }
+      return config
+
 def plot_history(metrics, lr, logdir, timestamp):
     plt.plot(np.squeeze(metrics["loss"]),"b")
     plt.plot(np.squeeze(metrics["val_loss"]),"r")
@@ -165,6 +190,7 @@ def main(args):
     lr_decay = ExponentialDecay(initial_learning_rate=args.learningrate,
                                 decay_rate=args.decayrate,
                                 decay_steps=args.decaysteps)
+    custom_lr = CustomSchedule(args.hiddensize)
     opt = optimizer(learning_rate=lr_decay, clipvalue=3)
     # model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
     model.compile(loss=keras.losses.SparseCategoricalCrossentropy(name="loss"), optimizer=opt, metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")])
