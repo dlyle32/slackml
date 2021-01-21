@@ -124,7 +124,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    slackurl = "https://hooks.slack.com/services/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"
+    slackurl = "slackurl"
     model = load_model(args.modelpath)
     timestamp = int(args.modelpath.split(".")[1])
     loaddir = "/".join(args.modelpath.split("/")[:-1])
