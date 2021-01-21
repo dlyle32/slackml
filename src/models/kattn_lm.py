@@ -18,7 +18,7 @@ from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_pad
 
 logger = logging.getLogger('keras_char_lm')
 
-def einsum_attn(q,k,v, dropout, mask):
+def einsum_attn(i,q,k,v, dropout, mask):
     dot = "aecd,abcd->acbe"
     com = "acbe,aecd->abcd"
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -36,8 +36,8 @@ def einsum_attn(q,k,v, dropout, mask):
         # attn_factor[mask == False] = -1e9
         mask = mask == False
         attn_factor += (mask * -1e9)
-    attn_factor = keras.layers.Softmax()(attn_factor)
-    attn_factor = keras.layers.Dropout(dropout)(attn_factor)
+    attn_factor = keras.layers.Softmax(name="attention_values_%d" % i)(attn_factor)
+    attn_factor = keras.layers.Dropout(dropout, name="attention_dropout_%d" % i)(attn_factor)
     print(attn_factor.shape)
     print(v.shape)
     C = special_math_ops.einsum(com, attn_factor, v)
@@ -45,8 +45,8 @@ def einsum_attn(q,k,v, dropout, mask):
     return C, attn_factor
 
 
-def attention_head(q, k, v, dropout, mask=None):
-    return einsum_attn(q,k,v, dropout, mask)
+def attention_head(i,q, k, v, dropout, mask=None):
+    return einsum_attn(i,q,k,v, dropout, mask)
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
     dk = k.shape[-1]
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -67,12 +67,12 @@ def attention_head(q, k, v, dropout, mask=None):
     return tf.matmul(attn_factor, v), attn_factor
 
 
-def multihead_attention(q, k, v, h, n_a, m, reg, dropout, mask=None):
+def multihead_attention(i, q, k, v, h, n_a, m, reg, dropout, mask=None):
     dim = n_a // h
-    Wq = keras.layers.Dense(n_a, kernel_regularizer=reg)
-    Wk = keras.layers.Dense(n_a, kernel_regularizer=reg)
-    Wv = keras.layers.Dense(n_a, kernel_regularizer=reg)
-    Wo = keras.layers.Dense(n_a, kernel_regularizer=reg)
+    Wq = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_q_%d" % i)
+    Wk = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_k_%d" % i)
+    Wv = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_v_%d" % i)
+    Wo = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_o_%d" % i)
 
     seqlen = q.shape[1]
     shape = [m, seqlen, h, dim]
@@ -82,7 +82,7 @@ def multihead_attention(q, k, v, h, n_a, m, reg, dropout, mask=None):
     K = tf.reshape(Wk(k), shape)
     V = tf.reshape(Wv(v), shape)
 
-    C, attn_factor = attention_head(Q, K, V, dropout, mask)
+    C, attn_factor = attention_head(i,Q, K, V, dropout, mask)
     C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (m, seqlen, n_a))
 
     return Wo(C)
@@ -176,7 +176,7 @@ class AttentionModelBuilder:
 
         # attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
         # attn_out = attn_layer(x,x,x, attention_mask=mask)
-        attn_out = multihead_attention(x, x, x, self.attention_heads, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        attn_out = multihead_attention(i, x, x, x, self.attention_heads, self.n_a, m, reg, self.dropout_rate, mask=mask)
         #     attn_out = tf.reshape(out, (m,seqlen*n_a))
 
         x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x + attn_out)
@@ -265,34 +265,41 @@ class AttentionModelBuilder:
         model = keras.Model(inputs=inpt, outputs=out)
         return model
 
+    def logtop5(self,p, vocab):
+        top5 = tf.math.top_k(p, k=5)
+        top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
+        logger.info(top5)
+
     def sample(self, model, tokens, vocab, reverse_token_map, temp=1):
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
         # start = np.random.randint(0, len(tokens) - self.seqlen)
         # inpt = tokens[start:start+self.seqlen]
-        # x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
-        # x = np.asarray(x)
-        # x = x.reshape((1, seqlen))
-        # preds = model.predict(x, verbose=0)[0]
-        # for j in range(self.seqlen):
-        #     p = preds[j]
-        #     top5 = tf.math.top_k(p, k=5)
-        #     top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
-        #     logger.info(top5)
-        inpt = ["<START>" for i in range(self.seqlen)]
+        inpt = [" " for i in range(self.seqlen)]
+        inpt[0] = "\n"
+        x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+        x = np.asarray(x)
+        x = x.reshape((1, seqlen))
+        preds = model.predict(x, verbose=0)[0]
+        for j in range(self.seqlen):
+            p = preds[j]
+            top5 = tf.math.top_k(p, k=5)
+            top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
+            logger.info(top5)
         output = ""
         mintokens = 15
         maxtokens = 100
         i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             # x = np.zeros((1, seqlen))
-            # logger.info(inpt)
+            logger.info(inpt)
             x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
             x = np.asarray(x)
             x = x.reshape((1,seqlen))
             preds = model.predict(x, verbose=0)[0]
             preds = preds[min(i, self.seqlen - 1)]
+            self.logtop5(preds,vocab)
             # topk = tf.math.top_k(preds, k=50)
             # topk_preds = keras.layers.Softmax()(topk.values/temp)
             # token_ix = np.random.choice(topk.indices, p=topk_preds)
@@ -302,7 +309,7 @@ class AttentionModelBuilder:
                 token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
                 retries += 1
             new_token = vocab[token_ix]
-            # logger.info(new_token)
+            logger.info(new_token)
             output += new_token
             if (i + 1 < len(inpt)):
                 inpt[i + 1] = new_token
