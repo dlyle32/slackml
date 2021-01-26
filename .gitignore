@@ -10,3 +10,4 @@ training_*
 vocab*
 *.zip
 *.png
+*.h5
