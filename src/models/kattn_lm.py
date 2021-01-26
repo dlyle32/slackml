@@ -19,31 +19,41 @@ from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_pad
 
 logger = logging.getLogger('keras_char_lm')
 
+class EinsumOp(keras.layers.Layer):
+    def __init__(self, op, **kwargs):
+        super(EinsumOp, self).__init__(**kwargs)
+        self.op = op
+
+    def call(self, inputs):
+        a1 = inputs[0]
+        a2 = inputs[1]
+        attn_factor = special_math_ops.einsum(self.op, a1, a2)
+        return attn_factor
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "op" : self.op
+        })
+        return config
+
 def einsum_attn(i,q,k,v, dropout, mask):
-    dot = "aecd,abcd->acbe"
-    com = "acbe,aecd->abcd"
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
     ndim = len(k.shape)
     perm = list(range(ndim))
     perm[-2] = ndim - 1
     perm[-1] = ndim - 2
+    dot = "aecd,abcd->acbe"
+    com = "acbe,aecd->abcd"
 
-    # use perm to transpose final two dimensions of key vector
-    # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
-    attn_factor = special_math_ops.einsum(dot, k, q)
+    attn_factor = EinsumOp(dot, name="einsum_dot_%d" % i)([k,q])
     attn_factor = attn_factor / tf.math.sqrt(dk)
-    # attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
-        # attn_factor[mask == False] = -1e9
         adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
-        # mask = mask == False
         attn_factor += adder
     attn_factor = keras.layers.Softmax(name="attention_values_%d" % i)(attn_factor)
     attn_factor = keras.layers.Dropout(dropout, name="attention_dropout_%d" % i)(attn_factor)
-    print(attn_factor.shape)
-    print(v.shape)
-    C = special_math_ops.einsum(com, attn_factor, v)
-    print(C.shape)
+    C = EinsumOp(com, name="einsum_com_%d" % i)([attn_factor,v])
     return C, attn_factor
 
 
