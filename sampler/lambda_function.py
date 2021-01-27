@@ -17,6 +17,10 @@ from numpy.random import choice
 import json
 import requests
 
+import matplotlib
+import matplotlib.pyplot as plt
+from models.kattn_lm import EinsumOp
+
 def verify_request(event):
     body=event["body"]
     headers = event["headers"]
@@ -89,10 +93,74 @@ def token_to_oh(index, vocab_size):
 def char_padded(sequence, pad, maxlen):
     return [pad if i >= len(sequence) else sequence[i] for i in range(maxlen)]
 
-def logtop5(p, vocab):
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw={}, cbarlabel="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (N, M).
+    row_labels
+        A list or array of length N with the labels for the rows.
+    col_labels
+        A list or array of length M with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if not ax:
+        ax = plt.gca()
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
+    # ... and label them with the respective list entries.
+    ax.set_xticklabels(col_labels)
+    ax.set_yticklabels(row_labels)
+
+    # Let the horizontal axes labeling appear on top.
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=-90, ha="right",
+             rotation_mode="anchor")
+
+    # Turn spines off and create white grid.
+    for edge, spine in ax.spines.items():
+        spine.set_visible(False)
+
+    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    return im, cbar
+
+
+def gettop5(p, vocab):
         top5 = tf.math.top_k(p, k=5)
         top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
-        print(top5)
+        return top5
+
+def logtop5(p, vocab):
+        print(gettop5(p,vocab))
 
 def sample( model, seqlen, vocab, reverse_token_map, temp=1):
     vocab_size = len(vocab)
@@ -101,13 +169,59 @@ def sample( model, seqlen, vocab, reverse_token_map, temp=1):
     # output = "you know what the crowd says "
     # s = ["you"," ","know"," ", "what", " ", "the", " ", "crowd", " ", "says", " "]
     # output = "<START> finally, someone made an image out of the sensible argument for fahrenheit everywhere as human readable temperature"
+ 
     output ="<START> when i walk crowd i put on sandals mostly because the floor is dirty now with the sand and salt and whatnot in the winter"
+    output ="<START> this fast dog gum jump sad distinct surely dank flavor dingus is the a to and of sure for a nice ten second job stuff shit guys"
     s = output.split(" ")
     spaces = [" " for i in range(len(s))]
     s = [val for pair in zip(s,spaces) for val in pair]
     # inpt = ["<START>" for i in range(seqlen)]
     inpt = [s[i] if i < len(s) else "<START>" for i in range(seqlen)]
     output = ""
+
+    attn_4_output = model.get_layer("attention_values_4").output
+    attn_out = model.get_layer("dense_v_4").output
+    dense_v_out = model.get_layer("dense_v_4").output
+    einsum_com_output = model.get_layer("einsum_com_4").output
+    input_layer = model.get_layer("input")
+    attn_factor_model = keras.Model(inputs=input_layer.input, outputs=attn_4_output)
+    einsum_com_model = keras.Model(inputs=input_layer.input, outputs=einsum_com_output)
+    dense_v_model = keras.Model(inputs=input_layer.input, outputs=dense_v_out)
+
+    x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+    x = np.asarray(x)
+    x = x.reshape((1, seqlen))
+    attn_out = attn_factor_model.predict(x, verbose=0)[0]
+    preds = model.predict(x, verbose=0)[0]
+    top5s = ["\'%s\'" % gettop5(p,vocab)[0][0] for p in preds]
+
+    fig, ax = plt.subplots()
+    lbls = ["\'%s\'" % t for t in inpt]
+    im, cbar = heatmap(attn_out[0,:,:], lbls, lbls, ax=ax,
+                   cmap="YlGn", cbarlabel="attn")
+    plt.savefig("attention_heatmap_%d.jpg" % 0)
+    for i in range(1,attn_out.shape[0]):
+        im = ax.imshow(attn_out[i,:,:],cmap="YlGn")
+        
+        #texts = annotate_heatmap(im, valfmt="{x:.1f} t")
+
+        #fig.tight_layout()
+        #plt.show()
+        plt.savefig("attention_heatmap_%d.jpg" % i)
+    return ""
+
+    print(attn_out)
+    print(attn_out.shape)
+    print(inpt)
+    print("===============================================================================================")
+    for h in range(attn_out.shape[0]):
+        for i in range(attn_out.shape[1]):
+            print(inpt[i])
+            print([(inpt[j],attn_out[h,i,j]) for j in range(attn_out.shape[2]) if attn_out[h,i,j] != 0])
+            logtop5(preds[i],vocab)
+        print("===============================================================================================")
+    return ""
+
     mintokens = 15
     maxtokens = 100
     # i = len(s)-1
@@ -132,8 +246,8 @@ def sample( model, seqlen, vocab, reverse_token_map, temp=1):
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             retries += 1
         new_token = vocab[token_ix]
-        print(inpt[i])
-        print(new_token)
+        print(inpt)
+        print(inpt[min(i,seqlen-1)] + " ----> " + new_token)
         output += new_token
         if (i + 1 < len(inpt)):
             inpt[i+1] = new_token
@@ -271,7 +385,7 @@ def main():
     print("LOADING MODEL")
     print(modelpath)
     print(os.path.exists(modelpath))
-    model = load_model(modelpath)
+    model = load_model(modelpath, custom_objects={"EinsumOp": EinsumOp})
     #model = create_model(vocab)
     #model.load_weights(modelpath)
     # print(model.summary())
