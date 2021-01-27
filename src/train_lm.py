@@ -14,6 +14,7 @@ import os
 import argparse
 import logging
 from data.load import load_datasets, load_context_target_pairs
+from models.kattn_lm import EinsumOp
 
 logger = logging.getLogger('keras_char_lm')
 
@@ -175,7 +176,7 @@ def main(args):
         timestamp = int(modelpath.split(".")[1])
         init_epoch = int(modelpath.split(".")[2])
         loaddir = "/".join(modelpath.split("/")[:-1])
-        model = load_model(modelpath)
+        model = load_model(modelpath, custom_objects={"EinsumOp" : EinsumOp})
         vocab = load_vocab(loaddir, timestamp)
         # tokens = load_tokens(loaddir, timestamp)
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
@@ -228,9 +229,9 @@ def main(args):
             logger.info("\n" + sample_output)
         model.save(os.path.join(checkpointdir, checkpointnames).format(epoch=epoch))
         plot_history(allmetrics, args.learningrate, logdir, timestamp)
-    for i in range(10):
-        sample_output = sample_func()
-        logger.info("\n" + sample_output)
+    # for i in range(10):
+    #     sample_output = sample_func()
+    #     logger.info("\n" + sample_output)
 
     # model.fit(X, Y,
     #            batch_size=args.minibatchsize,
