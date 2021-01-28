@@ -37,8 +37,8 @@ class EinsumOp(keras.layers.Layer):
         })
         return config
 
-def einsum_attn(i,q,k,v, dropout, mask):
-    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+def einsum_attn(i,q,k,v, dropout, dk, mask):
+    dk = tf.cast(dk, tf.float32)
     ndim = len(k.shape)
     perm = list(range(ndim))
     perm[-2] = ndim - 1
@@ -57,8 +57,8 @@ def einsum_attn(i,q,k,v, dropout, mask):
     return C, attn_factor
 
 
-def attention_head(i,q, k, v, dropout, mask=None):
-    return einsum_attn(i,q,k,v, dropout, mask)
+def attention_head(i,q, k, v, dropout, dim, mask=None):
+    return einsum_attn(i,q,k,v, dropout, dim, mask)
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
     dk = k.shape[-1]
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -79,7 +79,7 @@ def attention_head(i,q, k, v, dropout, mask=None):
     return tf.matmul(attn_factor, v), attn_factor
 
 
-def multihead_attention(i, q, k, v, h, n_a, m, reg, dropout, mask=None):
+def multihead_attention(i, q, k, v, h, n_a, reg, dropout, mask=None):
     dim = n_a // h
     Wq = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_q_%d" % i)
     Wk = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_k_%d" % i)
@@ -87,15 +87,15 @@ def multihead_attention(i, q, k, v, h, n_a, m, reg, dropout, mask=None):
     Wo = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_o_%d" % i)
 
     seqlen = q.shape[1]
-    shape = [m, seqlen, h, dim]
+    shape = [-1, seqlen, h, dim]
     Q = Wq(q)
     Q = tf.reshape(Q, shape)
     #Q = tf.transpose(Q, perm=[0, 1, 2, 3]) # reshape for heads x seqlen x model_dim
     K = tf.reshape(Wk(k), shape)
     V = tf.reshape(Wv(v), shape)
 
-    C, attn_factor = attention_head(i,Q, K, V, dropout, mask)
-    C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (m, seqlen, n_a))
+    C, attn_factor = attention_head(i,Q, K, V, dropout, dim, mask)
+    C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (-1, seqlen, n_a))
 
     return Wo(C)
 
@@ -184,14 +184,14 @@ class AttentionModelBuilder:
 
     def transformer_encoder(self, x, i, reg, mask=None):
         # Embedding, self-attention, dropout, residual layerNorm, ffn, residual layerNorm
-        m = tf.shape(x)[0]
 
         # attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
         # attn_out = attn_layer(x,x,x, attention_mask=mask)
-        attn_out = multihead_attention(i, x, x, x, self.attention_heads, self.n_a, m, reg, self.dropout_rate, mask=mask)
+        attn_out = multihead_attention(i, x, x, x, self.attention_heads, self.n_a, reg, self.dropout_rate, mask=mask)
         #     attn_out = tf.reshape(out, (m,seqlen*n_a))
 
-        x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x + attn_out)
+        x = keras.layers.add([attn_out, x])
+        x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x)
 
         # Feed-forward layer
         ffn = keras.Sequential(
@@ -205,7 +205,8 @@ class AttentionModelBuilder:
         ffn_out = ffn(x)
         ffn_out = keras.layers.Dropout(self.dropout_rate, name="encoder_{}/ffn_dropout".format(i))(ffn_out)
 
-        x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/ffn_norm".format(i))(x + ffn_out)
+        x = keras.layers.add([ffn_out, x])
+        x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/ffn_norm".format(i))(x)
         return x
 
     def subsequent_mask(self, shape):
@@ -251,9 +252,7 @@ class AttentionModelBuilder:
         reg = keras.regularizers.l2(self.reg_factor)
 
         inpt = keras.layers.Input(shape=(self.seqlen), name="input")
-        targets = keras.layers.Input(shape=(self.seqlen), name="targets")
         out = keras.layers.Embedding(vocab_size, self.n_a, input_length=self.seqlen)(inpt)
-        target_emb = keras.layers.Embedding(vocab_size, self.n_a, input_length=self.seqlen)(targets)
         pos_enc = positional_encoding(self.seqlen, self.n_a)
         pos_emb = keras.layers.Embedding(
             input_dim=self.seqlen,
@@ -261,15 +260,14 @@ class AttentionModelBuilder:
             weights=[pos_enc],
             name="position_embedding",
         )(tf.range(start=0, limit=self.seqlen, delta=1))
-        encoder_out = out + pos_emb
-        target_emb = target_emb + pos_emb
-        m = tf.shape(out)[0]
+        # encoder_out = out + pos_emb
+        encoder_out = tf.math.add(out, pos_emb)
         mask = self.subsequent_mask(self.seqlen)
         for i in range(self.transformer_layers):
             encoder_out = self.transformer_encoder(encoder_out, i, reg, mask)
         # decoder_out = self.transformer_decoder(encoder_out, target_emb, reg, mask)
-        out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg)(encoder_out)
-        out = keras.layers.Dense(vocab_size, activation="softmax", kernel_regularizer=reg)(out)
+        out = keras.layers.Dense(self.ffdim, activation="relu", kernel_regularizer=reg, name="penult_dense")(encoder_out)
+        out = keras.layers.Dense(vocab_size, activation="softmax", kernel_regularizer=reg, name="final_dense")(out)
 
         # masked_model = MaskedLanguageModel(inputs=inpt, outputs=masked_out)
         # return masked_model
