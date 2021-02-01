@@ -38,15 +38,22 @@ class EinsumOp(keras.layers.Layer):
         return config
 
 def einsum_attn(i,q,k,v, dropout, dk, mask):
+    # (1)
+    # Query - key dot product:
+    # (bd,qad, h, d), (bd,kad, h, d) -> (bd,h, qad, kad)
+    # (2)
+    # Combination:
+    # (bd, h, qad, kad), (bd, vad, h, d) -> (bd, qad, h,d)
     dk = tf.cast(dk, tf.float32)
     ndim = len(k.shape)
     perm = list(range(ndim))
     perm[-2] = ndim - 1
     perm[-1] = ndim - 2
-    dot = "aecd,abcd->acbe"
+    # dot = "aecd,abcd->acbe"
+    dot = "aecd,abcd->aceb"
     com = "acbe,aecd->abcd"
 
-    attn_factor = EinsumOp(dot, name="einsum_dot_%d" % i)([k,q])
+    attn_factor = EinsumOp(dot, name="einsum_dot_%d" % i)([q,k])
     attn_factor = attn_factor / tf.math.sqrt(dk)
     if mask is not None:
         adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
@@ -60,8 +67,7 @@ def einsum_attn(i,q,k,v, dropout, dk, mask):
 def attention_head(i,q, k, v, dropout, dim, mask=None):
     return einsum_attn(i,q,k,v, dropout, dim, mask)
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
-    dk = k.shape[-1]
-    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+    dk = tf.cast(dim, tf.float32)
     ndim = len(k.shape)
     perm = list(range(ndim))
     perm[-2] = ndim - 1
@@ -71,13 +77,15 @@ def attention_head(i,q, k, v, dropout, dim, mask=None):
     # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
     attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
-        # attn_factor[mask == False] = -1e9
-        mask = mask == False
-        attn_factor = (mask * -1e9)
+        adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
+        attn_factor += adder
+    # if mask is not None:
+    #     # attn_factor[mask == False] = -1e9
+    #     mask = mask == False
+    #     attn_factor = (mask * -1e9)
     attn_factor = keras.layers.Softmax()(attn_factor)
     attn_factor = keras.layers.Dropout(dropout)(attn_factor)
     return tf.matmul(attn_factor, v), attn_factor
-
 
 def multihead_attention(i, q, k, v, h, n_a, reg, dropout, mask=None):
     dim = n_a // h
@@ -90,12 +98,15 @@ def multihead_attention(i, q, k, v, h, n_a, reg, dropout, mask=None):
     shape = [-1, seqlen, h, dim]
     Q = Wq(q)
     Q = tf.reshape(Q, shape)
-    #Q = tf.transpose(Q, perm=[0, 1, 2, 3]) # reshape for heads x seqlen x model_dim
+    # Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
     K = tf.reshape(Wk(k), shape)
+    # K = tf.transpose(K, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
     V = tf.reshape(Wv(v), shape)
+    # V = tf.transpose(V, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
 
     C, attn_factor = attention_head(i,Q, K, V, dropout, dim, mask)
-    C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (-1, seqlen, n_a))
+    # C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (-1, seqlen, n_a))
+    C = tf.reshape(C, (-1, seqlen, n_a))
 
     return Wo(C)
 
