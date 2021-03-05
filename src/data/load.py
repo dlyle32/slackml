@@ -1,6 +1,29 @@
 import os
 import random
 import json
+import tensorflow as tf
+
+def imdb_data_load(directory):
+    batch_size=128
+    filenames = []
+    directories = [
+        "%s/train/pos" % directory,
+        "%s/aclImdb/train/neg" % directory,
+        "%s/test/pos" % directory,
+        "%s/test/neg" % directory,
+    ]
+    for dir in directories:
+        for f in os.listdir(dir):
+            filenames.append(os.path.join(dir, f))
+
+    print(f"{len(filenames)} files")
+
+    # Create a dataset from text files
+    random.shuffle(filenames)
+    text_ds = tf.data.TextLineDataset(filenames)
+    text_ds = text_ds.shuffle(buffer_size=256)
+    text_ds = text_ds.batch(batch_size)
+    return text_ds
 
 def load_datasets(directory, training_threshold = 0.9):
     train_data = []
