@@ -1,19 +1,15 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.callbacks import LambdaCallback, ModelCheckpoint, CSVLogger
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import LSTM, Dropout, Embedding
-from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import TimeDistributed
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 from tensorflow.python.ops import special_math_ops
 from tensorflow.python.ops import math_ops
+from tensorflow.python.keras.layers import einsum_dense
 import numpy as np
-import nltk
 from tokenizers.sliding_window import SlidingWindowTokenizer
-import random
-import math
+from tokenizers.tf_text_vectorization import TFVectTokenizer
+
 import logging
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 
@@ -45,10 +41,6 @@ def einsum_attn(i,q,k,v, dropout, dk, mask):
     # Combination:
     # (bd, h, qad, kad), (bd, vad, h, d) -> (bd, qad, h,d)
     dk = tf.cast(dk, tf.float32)
-    ndim = len(k.shape)
-    perm = list(range(ndim))
-    perm[-2] = ndim - 1
-    perm[-1] = ndim - 2
     # dot = "aecd,abcd->acbe"
     dot = "aecd,abcd->aceb"
     com = "acbe,aecd->abcd"
@@ -65,16 +57,10 @@ def einsum_attn(i,q,k,v, dropout, dk, mask):
 
 
 def attention_head(i,q, k, v, dropout, dim, mask=None):
-    return einsum_attn(i,q,k,v, dropout, dim, mask)
+    # return einsum_attn(i,q,k,v, dropout, dim, mask)
     # Q dot K scaled -> softmax = attention parameters -> ap * V summed = output
     dk = tf.cast(dim, tf.float32)
-    ndim = len(k.shape)
-    perm = list(range(ndim))
-    perm[-2] = ndim - 1
-    perm[-1] = ndim - 2
 
-    # use perm to transpose final two dimensions of key vector
-    # attn_factor = tf.matmul(q, tf.transpose(k, perm=perm)) / (dk ** 0.5)
     attn_factor = tf.matmul(q,k, transpose_b=True) / tf.math.sqrt(dk)
     if mask is not None:
         adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
@@ -87,25 +73,59 @@ def attention_head(i,q, k, v, dropout, dim, mask=None):
     attn_factor = keras.layers.Dropout(dropout)(attn_factor)
     return tf.matmul(attn_factor, v), attn_factor
 
-def multihead_attention(i, q, k, v, h, n_a, reg, dropout, mask=None):
+def einsum_multihead_attention(i, q, k, v, h, n_a, reg, dropout,seqlen, mask=None):
     dim = n_a // h
-    Wq = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_q_%d" % i)
-    Wk = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_k_%d" % i)
-    Wv = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_v_%d" % i)
-    Wo = keras.layers.Dense(n_a, kernel_regularizer=reg, name="dense_o_%d" % i)
+    Wq = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_q_%d" % i)
+    Wk = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_k_%d" % i)
+    Wv = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_v_%d" % i)
+    Wo = einsum_dense.EinsumDense("abcd,cde->abe", output_shape=[None, n_a], bias_axes="e", name="dense_o_%d" % i)
 
-    seqlen = q.shape[1]
+    # Wq = tf.keras.layers.Dense(n_a, name="dense_q_%d" % i)
+    # Wk = tf.keras.layers.Dense(n_a, name="dense_k_%d" % i)
+    # Wv = tf.keras.layers.Dense(n_a, name="dense_v_%d" % i)
+    # Wo = keras.layers.Dense(n_a, name="dense_o_%d" % i)
+
+    Q = Wq(q)
+    K = Wk(k)
+    V = Wv(v)
+
+    batch_size = tf.shape(q)[0]
+
+    # shape = [batch_size, -1, h, dim]
+    # Q = tf.reshape(Q, shape)
+    # Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    # K = tf.reshape(K, shape)
+    # K = tf.transpose(K, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    # V = tf.reshape(V, shape)
+    # V = tf.transpose(V, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    C, attn_factor = einsum_attn(i, Q, K, V, dropout, dim, mask)
+    # C, attn_factor = attention_head(i, Q, K, V, dropout, dim, mask)
+    # C = tf.transpose(C, perm=[0, 2, 1, 3])
+    # C = tf.reshape(C, (-1, seqlen, n_a))
+
+    return Wo(C)
+
+def multihead_attention(i, q, k, v, h, n_a, reg, dropout,seqlen, mask=None):
+    return einsum_multihead_attention(i, q, k, v, h, n_a, reg, dropout,seqlen, mask)
+    dim = n_a // h
+    Wq = keras.layers.Dense(n_a, name="dense_q_%d" % i)
+    Wk = keras.layers.Dense(n_a, name="dense_k_%d" % i)
+    Wv = keras.layers.Dense(n_a, name="dense_v_%d" % i)
+    Wo = keras.layers.Dense(n_a, name="dense_o_%d" % i)
+
     shape = [-1, seqlen, h, dim]
     Q = Wq(q)
+    K = Wk(k)
+    V = Wv(v)
     Q = tf.reshape(Q, shape)
-    # Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
-    K = tf.reshape(Wk(k), shape)
-    # K = tf.transpose(K, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
-    V = tf.reshape(Wv(v), shape)
-    # V = tf.transpose(V, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    K = tf.reshape(K, shape)
+    K = tf.transpose(K, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
+    V = tf.reshape(V, shape)
+    V = tf.transpose(V, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
 
     C, attn_factor = attention_head(i,Q, K, V, dropout, dim, mask)
-    # C = tf.reshape(tf.transpose(C, perm=[0, 2, 1, 3]), (-1, seqlen, n_a))
+    # C = tf.transpose(C, perm=[0, 2, 1, 3])
     C = tf.reshape(C, (-1, seqlen, n_a))
 
     return Wo(C)
@@ -139,7 +159,8 @@ class AttentionModelBuilder:
         self.transformer_layers = args.transformer_layers
         self.attention_heads = args.attention_heads
 
-        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        # self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        self.tokenizer = TFVectTokenizer(self.seqlen, self.step, args.freqthreshold)
 
     def tokenize(self, data, freq_threshold=None):
         return self.tokenizer.tokenize(data)
@@ -198,8 +219,7 @@ class AttentionModelBuilder:
 
         # attn_layer = keras.layers.MultiHeadAttention(self.attention_heads, self.n_a//self.attention_heads)
         # attn_out = attn_layer(x,x,x, attention_mask=mask)
-        attn_out = multihead_attention(i, x, x, x, self.attention_heads, self.n_a, reg, self.dropout_rate, mask=mask)
-        #     attn_out = tf.reshape(out, (m,seqlen*n_a))
+        attn_out = multihead_attention(i, x, x, x, self.attention_heads, self.n_a, reg, self.dropout_rate,self.seqlen, mask=mask)
 
         x = keras.layers.add([attn_out, x])
         x = keras.layers.LayerNormalization(epsilon=1e-6, name="encoder_{}/attn_norm".format(i))(x)
