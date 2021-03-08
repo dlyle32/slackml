@@ -7,10 +7,10 @@ def imdb_data_load(directory):
     batch_size=128
     filenames = []
     directories = [
-        "%s/train/pos" % directory,
-        "%s/aclImdb/train/neg" % directory,
-        "%s/test/pos" % directory,
-        "%s/test/neg" % directory,
+        os.path.join(directory,"train/pos"),
+        os.path.join(directory,"train/neg"),
+        os.path.join(directory,"test/pos"),
+        os.path.join(directory,"test/neg"),
     ]
     for dir in directories:
         for f in os.listdir(dir):
