@@ -16,6 +16,7 @@ import logging
 from data.load import load_datasets, load_context_target_pairs, imdb_data_load
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 from models.kattn_lm import EinsumOp
+from callbacks.text_gen import TextGenerator
 from tensorflow.keras.utils import plot_model
 
 logger = logging.getLogger('keras_char_lm')
@@ -213,20 +214,22 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    seqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+    ds = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
-    trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
+    #trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
     # X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
-    ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+    # ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
     # model.fit(X, Y,
+    print(ds)
+    start_prompt = "this movie is"
+    start_tokens = [reverse_token_map[t] for t in start_prompt.split()]
+    num_tokens_generated = 40
+    text_gen_callback = TextGenerator(num_tokens_generated, args.seqlength, start_tokens, vocab)
     history = model.fit(ds,
-              batch_size=args.minibatchsize,
                epochs=args.numepochs,
-               initial_epoch=init_epoch,
-               validation_split=0.2,
                shuffle=True,
-               callbacks=[])
+               callbacks=[text_gen_callback])
     logger.info(history.history)
     return
     allmetrics = {}
