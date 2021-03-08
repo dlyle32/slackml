@@ -1,7 +1,5 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import TimeDistributed
-from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 from tensorflow.python.ops import special_math_ops
 from tensorflow.python.ops import math_ops
@@ -41,7 +39,6 @@ def einsum_attn(i,q,k,v, dropout, dk, mask):
     # Combination:
     # (bd, h, qad, kad), (bd, vad, h, d) -> (bd, qad, h,d)
     dk = tf.cast(dk, tf.float32)
-    # dot = "aecd,abcd->acbe"
     dot = "aecd,abcd->aceb"
     com = "acbe,aecd->abcd"
 
@@ -65,10 +62,6 @@ def attention_head(i,q, k, v, dropout, dim, mask=None):
     if mask is not None:
         adder = (1.0 - math_ops.cast(mask, attn_factor.dtype)) * -1e9
         attn_factor += adder
-    # if mask is not None:
-    #     # attn_factor[mask == False] = -1e9
-    #     mask = mask == False
-    #     attn_factor = (mask * -1e9)
     attn_factor = keras.layers.Softmax()(attn_factor)
     attn_factor = keras.layers.Dropout(dropout)(attn_factor)
     return tf.matmul(attn_factor, v), attn_factor
@@ -80,28 +73,11 @@ def einsum_multihead_attention(i, q, k, v, h, n_a, reg, dropout,seqlen, mask=Non
     Wv = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_v_%d" % i)
     Wo = einsum_dense.EinsumDense("abcd,cde->abe", output_shape=[None, n_a], bias_axes="e", name="dense_o_%d" % i)
 
-    # Wq = tf.keras.layers.Dense(n_a, name="dense_q_%d" % i)
-    # Wk = tf.keras.layers.Dense(n_a, name="dense_k_%d" % i)
-    # Wv = tf.keras.layers.Dense(n_a, name="dense_v_%d" % i)
-    # Wo = keras.layers.Dense(n_a, name="dense_o_%d" % i)
-
     Q = Wq(q)
     K = Wk(k)
     V = Wv(v)
 
-    batch_size = tf.shape(q)[0]
-
-    # shape = [batch_size, -1, h, dim]
-    # Q = tf.reshape(Q, shape)
-    # Q = tf.transpose(Q, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
-    # K = tf.reshape(K, shape)
-    # K = tf.transpose(K, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
-    # V = tf.reshape(V, shape)
-    # V = tf.transpose(V, perm=[0, 2, 1, 3]) # reshape for heads x seqlen x model_dim
     C, attn_factor = einsum_attn(i, Q, K, V, dropout, dim, mask)
-    # C, attn_factor = attention_head(i, Q, K, V, dropout, dim, mask)
-    # C = tf.transpose(C, perm=[0, 2, 1, 3])
-    # C = tf.reshape(C, (-1, seqlen, n_a))
 
     return Wo(C)
 
