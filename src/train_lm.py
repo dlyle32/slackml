@@ -13,8 +13,10 @@ import time
 import os
 import argparse
 import logging
-from data.load import load_datasets, load_context_target_pairs
+from data.load import load_datasets, load_context_target_pairs, imdb_data_load
+from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 from models.kattn_lm import EinsumOp
+from tensorflow.keras.utils import plot_model
 
 logger = logging.getLogger('keras_char_lm')
 
@@ -142,10 +144,11 @@ def plot_history(metrics, lr, logdir, timestamp):
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
+    train = imdb_data_load(datadir)
     train, test = load_datasets(datadir)
     # train, test = load_context_target_pairs(datadir, context_len = args.conlength)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
-    train = train[:min(len(train), args.datacap)]
+    # train = train[:min(len(train), args.datacap)]
 
     # Dynamically load modelBuilder class
     moduleName, klassName = args.modelbuilder.split(".")
@@ -186,6 +189,7 @@ def main(args):
         if args.savetokens:
             save_tokens(tokens, checkpointdir, timestamp)
 
+    plot_model(model, to_file='model_plot_2.png', show_shapes=True, show_layer_names=True)
     optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
     optimizer = optimizer_map[args.optimizer] if args.optimizer in optimizer_map.keys() else RMSprop
     lr_decay = ExponentialDecay(initial_learning_rate=args.learningrate,
@@ -194,9 +198,16 @@ def main(args):
     custom_lr = CustomSchedule(args.hiddensize)
     opt = optimizer(learning_rate=lr_decay, clipvalue=3)
     # model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
+    # attn_4_output = model.get_layer("attention_values_4").output
+    # dense_v_out = model.get_layer("dense_v_4").output
+    # einsum_com_output = model.get_layer("einsum_com_4").output
+    # inpt = model.get_layer("input")
+    # attn_factor_model = keras.Model(inputs=inpt.input, outputs=attn_4_output)
+    # einsum_com_model = keras.Model(inputs=inpt.input, outputs=einsum_com_output)
+    # dense_v_model = keras.Model(inputs=inpt.input, outputs=dense_v_out)
     model.compile(loss=keras.losses.SparseCategoricalCrossentropy(name="loss"), optimizer=opt, metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")])
 
-    model.summary(print_fn=logger.info)
+    # model.summary(print_fn=logger.info)
 
     checkpointnames = args.checkpointnames % timestamp
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
@@ -206,6 +217,17 @@ def main(args):
 
     trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
+    # X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+    ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+    # model.fit(X, Y,
+    history = model.fit(ds,
+              batch_size=args.minibatchsize,
+               epochs=args.numepochs,
+               initial_epoch=init_epoch,
+               validation_split=0.2,
+               shuffle=True,
+               callbacks=[])
+    return
     allmetrics = {}
     for epoch in range(init_epoch, args.numepochs):
         batches = rand_mini_batches(trainseqs, args.minibatchsize)
@@ -232,14 +254,6 @@ def main(args):
     # for i in range(10):
     #     sample_output = sample_func()
     #     logger.info("\n" + sample_output)
-
-    # model.fit(X, Y,
-    #            batch_size=args.minibatchsize,
-    #            epochs=args.numepochs,
-    #            initial_epoch=init_epoch,
-    #            validation_split=0.2,
-    #            shuffle=True,
-    #            callbacks=callbacks)
 
 
 def parse_args():
