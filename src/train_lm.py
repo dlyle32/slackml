@@ -145,8 +145,8 @@ def plot_history(metrics, lr, logdir, timestamp):
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
-    train = imdb_data_load(datadir)
-    # train, test = load_datasets(datadir)
+    # train = imdb_data_load(datadir)
+    train, test = load_datasets(datadir)
     # train, test = load_context_target_pairs(datadir, context_len = args.conlength)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
     # train = train[:min(len(train), args.datacap)]
@@ -214,22 +214,25 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
 
-    ds = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+    trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
-    #trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
+    # trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
-    # X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+    X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
     # ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
     # model.fit(X, Y,
-    print(ds)
-    start_prompt = "this movie is"
-    start_tokens = [reverse_token_map[t] for t in start_prompt.split()]
-    num_tokens_generated = 40
-    text_gen_callback = TextGenerator(num_tokens_generated, args.seqlength, start_tokens, vocab)
-    history = model.fit(ds,
-               epochs=args.numepochs,
-               shuffle=True,
-               callbacks=[text_gen_callback])
+    # print(ds)
+    # start_prompt = "this movie is"
+    # start_tokens = [reverse_token_map[t] for t in start_prompt.split()]
+    # num_tokens_generated = 40
+    # text_gen_callback = TextGenerator(num_tokens_generated, args.seqlength, start_tokens, vocab)
+    history = model.fit(X,Y,
+                        epochs=args.numepochs,
+                        initial_epoch=init_epoch,
+                        batch_size=args.minibatchsize,
+                        validation_split=0.2,
+                        shuffle=True,
+                        callbacks=[])
     logger.info(history.history)
     return
     allmetrics = {}

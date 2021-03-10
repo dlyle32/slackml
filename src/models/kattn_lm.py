@@ -135,8 +135,8 @@ class AttentionModelBuilder:
         self.transformer_layers = args.transformer_layers
         self.attention_heads = args.attention_heads
 
-        # self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
-        self.tokenizer = TFVectTokenizer(self.seqlen, self.step, args.freqthreshold)
+        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        # self.tokenizer = TFVectTokenizer(self.seqlen, self.step, args.freqthreshold)
 
     def tokenize(self, data, freq_threshold=None):
         return self.tokenizer.tokenize(data)
