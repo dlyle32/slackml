@@ -234,6 +234,9 @@ def main(args):
                         shuffle=True,
                         callbacks=[])
     logger.info(history.history)
+    if args.runsamples:
+        sample_output = sample_func()
+        logger.info("\n" + sample_output)
     return
     allmetrics = {}
     for epoch in range(init_epoch, args.numepochs):
