@@ -69,7 +69,7 @@ class SlidingWindowTokenizer:
 
     def tokenize(self, data):
         # tokens = self.tokenizer.tokenize("<START> ".join(data))
-        tokens = self.word_tokenize("<START> ".join(data))
+        tokens = self.word_tokenize(" <START> ".join(data))
         token_counts = {}
         for t in tokens:
             if t not in token_counts.keys():

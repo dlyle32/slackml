@@ -294,14 +294,14 @@ class AttentionModelBuilder:
         # start = np.random.randint(0, len(tokens) - self.seqlen)
         # inpt = tokens[start:start+self.seqlen]
         inpt = [" " for i in range(self.seqlen)]
-        inpt[0] = "\n"
+        inpt[0] = "<START>"
         output = ""
         mintokens = 15
         maxtokens = 100
         i = 0
         while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
             # x = np.zeros((1, seqlen))
-            logger.info(inpt)
+            # logger.info(inpt)
             x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
             x = np.asarray(x)
             x = x.reshape((1,seqlen))
@@ -316,7 +316,7 @@ class AttentionModelBuilder:
                 token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
                 retries += 1
             new_token = vocab[token_ix]
-            logger.info(new_token)
+            # logger.info(new_token)
             output += new_token
             output += " "
             if (i + 1 < len(inpt)):
