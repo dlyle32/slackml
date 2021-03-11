@@ -214,6 +214,7 @@ def main(args):
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
     callbacks = get_callbacks(args.volumedir, checkpointdir, checkpointnames, timestamp, sample_func)
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: sample_func())
+    logger_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: logger.info("Epoch %d: %s" % (epoch, str(logs))))
 
     trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
@@ -233,7 +234,7 @@ def main(args):
                         batch_size=args.minibatchsize,
                         validation_split=0.2,
                         shuffle=True,
-                        callbacks=[sample_callback])
+                        callbacks=[sample_callback, logger_callback])
     logger.info(history.history)
     return
     allmetrics = {}
