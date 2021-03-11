@@ -68,10 +68,10 @@ def attention_head(i,q, k, v, dropout, dim, mask=None):
 
 def einsum_multihead_attention(i, q, k, v, h, n_a, reg, dropout,seqlen, mask=None):
     dim = n_a // h
-    Wq = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_q_%d" % i)
-    Wk = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_k_%d" % i)
-    Wv = einsum_dense.EinsumDense("abc,cde->abde", output_shape=[None, h, dim],bias_axes="de", name="dense_v_%d" % i)
-    Wo = einsum_dense.EinsumDense("abcd,cde->abe", output_shape=[None, n_a], bias_axes="e", name="dense_o_%d" % i)
+    Wq = einsum_dense.EinsumDense("abc,cde->abde", kernel_regularizer=reg, output_shape=[None, h, dim],bias_axes="de", name="dense_q_%d" % i)
+    Wk = einsum_dense.EinsumDense("abc,cde->abde", kernel_regularizer=reg, output_shape=[None, h, dim],bias_axes="de", name="dense_k_%d" % i)
+    Wv = einsum_dense.EinsumDense("abc,cde->abde", kernel_regularizer=reg, output_shape=[None, h, dim],bias_axes="de", name="dense_v_%d" % i)
+    Wo = einsum_dense.EinsumDense("abcd,cde->abe", kernel_regularizer=reg, output_shape=[None, n_a], bias_axes="e", name="dense_o_%d" % i)
 
     Q = Wq(q)
     K = Wk(k)
@@ -295,15 +295,6 @@ class AttentionModelBuilder:
         # inpt = tokens[start:start+self.seqlen]
         inpt = [" " for i in range(self.seqlen)]
         inpt[0] = "\n"
-        x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
-        x = np.asarray(x)
-        x = x.reshape((1, seqlen))
-        preds = model.predict(x, verbose=0)[0]
-        for j in range(self.seqlen):
-            p = preds[j]
-            top5 = tf.math.top_k(p, k=5)
-            top5 = [(vocab[tix], top5.values[ix].numpy()) for (ix, tix) in enumerate(top5.indices)]
-            logger.info(top5)
         output = ""
         mintokens = 15
         maxtokens = 100
@@ -316,7 +307,6 @@ class AttentionModelBuilder:
             x = x.reshape((1,seqlen))
             preds = model.predict(x, verbose=0)[0]
             preds = preds[min(i, self.seqlen - 1)]
-            self.logtop5(preds,vocab)
             # topk = tf.math.top_k(preds, k=50)
             # topk_preds = keras.layers.Softmax()(topk.values/temp)
             # token_ix = np.random.choice(topk.indices, p=topk_preds)
@@ -328,11 +318,13 @@ class AttentionModelBuilder:
             new_token = vocab[token_ix]
             logger.info(new_token)
             output += new_token
+            output += " "
             if (i + 1 < len(inpt)):
                 inpt[i + 1] = new_token
             else:
                 inpt = inpt[1:] + [new_token]
             i += 1
+        logger.info(output)
         return output
 
     def masked_sample(self, model, tokens, vocab, reverse_token_map):
