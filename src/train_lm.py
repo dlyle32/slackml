@@ -242,6 +242,8 @@ def main(args):
                   run_eagerly=True,
                   optimizer=opt,
                   metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+                           tf.keras.metrics.SparseTopKCategoricalAccuracy(k=3,name="top_3_accuracy"),
+                           tf.keras.metrics.SparseTopKCategoricalAccuracy(k=5,name="top_5_accuracy"),
                            last_word_prediction_accuracy(args.minibatchsize, args.seqlength)])
                            # last_word_prediction_topk_accuracy(args.minibatchsize, args.seqlength, 5)])
 
