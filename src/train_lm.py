@@ -125,6 +125,13 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
       }
       return config
 
+def configure_checkpointing(args, timestamp):
+    checkpoint_dir = os.path.join(args.volumedir, datetime.datetime.today().strftime('%Y%m%d'), "checkpoints/")
+    if not os.path.isdir(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    checkpoint_name = "nodle_word_lm.%d.{epoch:03d}.h5" % timestamp
+    return os.path.join(checkpoint_dir, checkpoint_name)
+
 def plot_history(metrics, lr, logdir, timestamp):
     plt.plot(np.squeeze(metrics["loss"]),"b")
     plt.plot(np.squeeze(metrics["val_loss"]),"r")
@@ -171,6 +178,9 @@ def main(args):
     checkpointdir = os.path.join(args.volumedir, datetime.datetime.today().strftime('%Y%m%d'), args.checkpointdir)
     if not os.path.isdir(checkpointdir):
         os.makedirs(checkpointdir)
+    checkpointpath = configure_checkpointing(args, timestamp)
+    checkpoint_callback = ModelCheckpoint(filepath=checkpointpath,
+                                          save_weights_only=False)
 
     # Create or load existing model
     init_epoch = 0
@@ -232,9 +242,9 @@ def main(args):
                         epochs=args.numepochs,
                         initial_epoch=init_epoch,
                         batch_size=args.minibatchsize,
-                        validation_split=0.2,
+                        validation_split=0.1,
                         shuffle=True,
-                        callbacks=[sample_callback, logger_callback])
+                        callbacks=[sample_callback, logger_callback, checkpoint_callback])
     logger.info(history.history)
     return
     allmetrics = {}
