@@ -149,6 +149,28 @@ def plot_history(metrics, lr, logdir, timestamp):
     accrfname = os.path.join(logdir, "model_accuracy_%d.png" % timestamp)
     plt.savefig(accrfname)
 
+def last_word_prediction_accuracy(batch_size, seqlen):
+    def last_word_cat_accuracy(y_true, y_pred):
+        # amax = np.argmax(y_pred, axis=-1)
+        # acc = np.dot(sample_weights, np.equal(y_true, amax))
+        # return acc
+        batch_size = tf.shape(y_true).numpy()[0]
+        sample_weights = np.zeros((batch_size, seqlen))
+        sample_weights[:, seqlen - 1] = 1
+        m = tf.keras.metrics.SparseCategoricalAccuracy()
+        m.update_state(y_true, y_pred, sample_weight=sample_weights)
+        return m.result().numpy()
+    return last_word_cat_accuracy
+
+def last_word_prediction_topk_accuracy(batch_size, seqlen, k):
+    def last_word_topk_cat_accuracy(y_true, y_pred):
+        sample_weights = np.zeros((batch_size, seqlen, 1))
+        sample_weights[:, seqlen - 1, :] = 1
+        m = tf.keras.metrics.SparseTopKCategoricalAccuracy(k=k)
+        m.update_state(y_true, y_pred, sample_weight=sample_weights)
+        return m.result().numpy()
+    return last_word_topk_cat_accuracy
+
 def main(args):
     # load train/test data
     datadir = os.path.join(args.volumedir, args.datadir)
@@ -216,7 +238,12 @@ def main(args):
     # attn_factor_model = keras.Model(inputs=inpt.input, outputs=attn_4_output)
     # einsum_com_model = keras.Model(inputs=inpt.input, outputs=einsum_com_output)
     # dense_v_model = keras.Model(inputs=inpt.input, outputs=dense_v_out)
-    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(name="loss"), optimizer=opt, metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")])
+    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(name="loss"),
+                  run_eagerly=True,
+                  optimizer=opt,
+                  metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+                           last_word_prediction_accuracy(args.minibatchsize, args.seqlength)])
+                           # last_word_prediction_topk_accuracy(args.minibatchsize, args.seqlength, 5)])
 
     # model.summary(print_fn=logger.info)
 
