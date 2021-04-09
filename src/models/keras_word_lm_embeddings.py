@@ -53,12 +53,12 @@ class WordLanguageModelEmbeddingsBuilder:
     def create_model(self, vocab):
         vocab_size = len(vocab)
         reg = regularizers.l2(self.reg_factor)
-        tf.keras.backend.set_floatx('float64')
+        # tf.keras.backend.set_floatx('float64')
         x = Input(shape=(self.seqlen), name="input")
         out = Embedding(vocab_size, 100, input_length=self.seqlen)(x)
         out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         out = Dropout(self.dropout_rate)(out)
-        out = LSTM(self.n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
+        out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         out = Dropout(self.dropout_rate)(out)
         out = Dense(self.n_a, activation='relu', kernel_regularizer=reg)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
@@ -67,30 +67,62 @@ class WordLanguageModelEmbeddingsBuilder:
         # model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
         return model
 
-    def sample(self, model, tokens, vocab, reverse_token_map):
+    def sample(self, model, tokens, vocab, reverse_token_map, temp=1):
         seqlen = self.seqlen
         vocab_size = len(vocab)
         token_ix = -1
-        i = random.randint(0, len(tokens) - seqlen - 1)
-        inpt = tokens[i:i + seqlen]
+        inpt = [" " for i in range(self.seqlen)]
+        inpt[0] = "<START>"
         output = ""
-        for t in inpt:
-            output += t
-        output += "->"
         mintokens = 15
         maxtokens = 100
         i = 0
-        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
-            x = np.zeros((1, seqlen))
-            x[0] = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+        while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['<START>']):
+            x = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+            x = np.asarray(x)
+            x = x.reshape((1,seqlen))
             preds = model.predict(x, verbose=0)[0]
+            preds = preds[min(i, self.seqlen - 1)]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+            retries = 0
+            while retries < 10 and token_ix == reverse_token_map["<UNK>"]:
+                token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+                retries += 1
             new_token = vocab[token_ix]
             output += new_token
-            inpt = inpt[1:] + [new_token]
-            i+=1
-        logger.info("\n" + output)
+            output += " "
+            if (i + 1 < len(inpt)):
+                inpt[i + 1] = new_token
+            else:
+                inpt = inpt[1:] + [new_token]
+            i += 1
+        logger.info(output)
         return output
+
+    # def sample(self, model, tokens, vocab, reverse_token_map):
+    #     seqlen = self.seqlen
+    #     vocab_size = len(vocab)
+    #     token_ix = -1
+    #     i = random.randint(0, len(tokens) - seqlen - 1)
+    #     inpt = tokens[i:i + seqlen]
+    #     output = ""
+    #     for t in inpt:
+    #         output += t
+    #     output += "->"
+    #     mintokens = 15
+    #     maxtokens = 100
+    #     i = 0
+    #     while i < maxtokens and (i < mintokens or token_ix != reverse_token_map['\n']):
+    #         x = np.zeros((1, seqlen))
+    #         x[0] = [get_ix_from_token(reverse_token_map, token) for token in inpt]
+    #         preds = model.predict(x, verbose=0)[0]
+    #         token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
+    #         new_token = vocab[token_ix]
+    #         output += new_token
+    #         inpt = inpt[1:] + [new_token]
+    #         i+=1
+    #     logger.info("\n" + output)
+    #     return output
 
     # def get_input_sequences(self, tokens, reverse_token_map):
     #     seqs = []
