@@ -247,7 +247,7 @@ def main(args):
                            last_word_prediction_accuracy(args.minibatchsize, args.seqlength)])
                            # last_word_prediction_topk_accuracy(args.minibatchsize, args.seqlength, 5)])
 
-    # model.summary(print_fn=logger.info)
+    model.summary(print_fn=logger.info)
 
     checkpointnames = args.checkpointnames % timestamp
     sample_func = lambda : modelBuilder.sample(model, tokens, vocab, reverse_token_map)
