@@ -14,6 +14,7 @@ import random
 import math
 import logging
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token
+from models.custom_model_metrics import CustomMetricsModel
 from tokenizers.sliding_window import SlidingWindowTokenizer
 
 
@@ -62,7 +63,8 @@ class WordLanguageModelEmbeddingsBuilder:
         out = Dropout(self.dropout_rate)(out)
         out = Dense(self.n_a, activation='relu', kernel_regularizer=reg)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
-        model = keras.Model(inputs=x, outputs=out)
+        # model = keras.Model(inputs=x, outputs=out)
+        model = CustomMetricsModel(inputs=x, outputs=out)
         # opt = RMSprop(learning_rate=self.learning_rate, clipvalue=3)
         # model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
         return model

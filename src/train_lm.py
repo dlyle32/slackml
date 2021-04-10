@@ -18,6 +18,7 @@ from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_pad
 from models.kattn_lm import EinsumOp
 from callbacks.text_gen import TextGenerator
 from tensorflow.keras.utils import plot_model
+from datasets.slack_text_line_dataset import SlackTextLineDataset
 
 logger = logging.getLogger('keras_char_lm')
 
@@ -206,7 +207,10 @@ def main(args):
 
     # Create or load existing model
     init_epoch = 0
-    tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
+    # tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
+    text_ds, vocab, tokens = SlackTextLineDataset(args, train).get_dataset()
+    reverse_token_map = {t: i for i, t in enumerate(vocab)}
+    text_ds = text_ds.shuffle(buffer_size=1024).batch(args.minibatchsize)
     if args.loadmodel and os.path.exists(args.loadmodel):
         modelpath = args.loadmodel
         timestamp = int(modelpath.split(".")[1])
@@ -255,11 +259,12 @@ def main(args):
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: sample_func())
     logger_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: logger.info("Epoch %d: %s" % (epoch, str(logs))))
 
-    trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+    # trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
 
     # trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
-    X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+    # X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
+
     # ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
     # model.fit(X, Y,
     # print(ds)
@@ -267,11 +272,11 @@ def main(args):
     # start_tokens = [reverse_token_map[t] for t in start_prompt.split()]
     # num_tokens_generated = 40
     # text_gen_callback = TextGenerator(num_tokens_generated, args.seqlength, start_tokens, vocab)
-    history = model.fit(X,Y,
+    history = model.fit(text_ds,
                         epochs=args.numepochs,
                         initial_epoch=init_epoch,
-                        batch_size=args.minibatchsize,
-                        validation_split=0.1,
+                        # batch_size=args.minibatchsize,
+                        # validation_split=0.1,
                         shuffle=True,
                         callbacks=[sample_callback, logger_callback, checkpoint_callback])
     logger.info(history.history)

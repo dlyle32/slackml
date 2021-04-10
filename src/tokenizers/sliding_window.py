@@ -18,21 +18,21 @@ class SlidingWindowTokenizer:
         self._re_non_word_chars = r"(?:[?!)\"\.;}\]\*\({\[])"
         """Characters that cannot appear within words"""
 
-        self._re_multi_char_punct = r"(?:\-{2,}|\.{2,}|(?:\.\s){2,}\.)"
+        self._re_multi_char_punct = r"(?:\-{2,}|\.{2,}|(?:\.[ \t\r\f\v]){2,}\.)"
         """Hyphen and ellipsis are multi-character punctuation"""
 
         self._word_tokenize_fmt = r"""(
                 %(MultiChar)s
                 |
-                (?=%(WordStart)s)\S+?  # Accept word characters until end is found
+                (?=%(WordStart)s)[^ \t\r\f\v]+?  # Accept word characters until end is found
                 (?= # Sequences marking a word's end
-                    \s|                                 # White-space
+                    [ \t\r\f\v]|                                 # White-space
                     $|                                  # End-of-string
                     %(NonWord)s|%(MultiChar)s|          # Punctuation
-                    ,(?=$|\s|%(NonWord)s|%(MultiChar)s) # Comma if at end of word
+                    ,(?=$|[ \t\r\f\v]||%(NonWord)s|%(MultiChar)s) # Comma if at end of word
                 )
                 |
-                \S
+                [^ \t\r\f\v]
             )"""
         """Format of a regular expression to split punctuation from words,
         excluding period."""
