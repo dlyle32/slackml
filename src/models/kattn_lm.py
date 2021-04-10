@@ -9,6 +9,7 @@ from tokenizers.sliding_window import SlidingWindowTokenizer
 from tokenizers.tf_text_vectorization import TFVectTokenizer
 
 import logging
+from models.custom_model_metrics import CustomMetricsModel
 from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_padded, create_oh
 
 logger = logging.getLogger('keras_char_lm')
@@ -279,7 +280,8 @@ class AttentionModelBuilder:
         # masked_model = MaskedLanguageModel(inputs=inpt, outputs=masked_out)
         # return masked_model
 
-        model = keras.Model(inputs=inpt, outputs=out)
+        # model = keras.Model(inputs=inpt, outputs=out)
+        model = CustomMetricsModel(inputs=inpt, outputs=out)
         return model
 
     def logtop5(self,p, vocab):
