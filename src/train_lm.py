@@ -208,9 +208,10 @@ def main(args):
     # Create or load existing model
     init_epoch = 0
     # tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
-    text_ds, vocab, tokens = SlackTextLineDataset(args, train).get_dataset()
+    X,Y, vocab, tokens = SlackTextLineDataset(args, train).get_dataset()
     reverse_token_map = {t: i for i, t in enumerate(vocab)}
-    text_ds = text_ds.shuffle(buffer_size=1024).batch(args.minibatchsize)
+    # text_ds = text_ds.shuffle(buffer_size=1024).batch(args.minibatchsize)
+    # print(text_ds.cardinality().numpy())
     if args.loadmodel and os.path.exists(args.loadmodel):
         modelpath = args.loadmodel
         timestamp = int(modelpath.split(".")[1])
@@ -225,6 +226,7 @@ def main(args):
         save_vocab(vocab, checkpointdir, timestamp)
         if args.savetokens:
             save_tokens(tokens, checkpointdir, timestamp)
+
 
     plot_model(model, to_file='model_plot_2.png', show_shapes=True, show_layer_names=True)
     optimizer_map = {"adam": Adam, "rmsprop": RMSprop, "sgd": SGD}
@@ -272,11 +274,11 @@ def main(args):
     # start_tokens = [reverse_token_map[t] for t in start_prompt.split()]
     # num_tokens_generated = 40
     # text_gen_callback = TextGenerator(num_tokens_generated, args.seqlength, start_tokens, vocab)
-    history = model.fit(text_ds,
+    history = model.fit(X, Y,
                         epochs=args.numepochs,
                         initial_epoch=init_epoch,
-                        # batch_size=args.minibatchsize,
-                        # validation_split=0.1,
+                        batch_size=args.minibatchsize,
+                        validation_split=0.1,
                         shuffle=True,
                         callbacks=[sample_callback, logger_callback, checkpoint_callback])
     logger.info(history.history)

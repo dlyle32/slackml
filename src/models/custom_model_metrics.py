@@ -3,12 +3,13 @@ import numpy as np
 from tensorflow import keras
 
 class CustomMetricsModel(tf.keras.Model):
-    # def __init__(self, **kwargs):
-    #     super(CustomMetricsModel, self).__init__(**kwargs)
-    #     self.loss_fn = keras.losses.SparseCategoricalCrossentropy(
-    #         reduction=tf.keras.losses.Reduction.NONE
-    #     )
-    #     self.accr_tracker = tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")
+    def __init__(self, reverse_token_map, **kwargs):
+        super(CustomMetricsModel, self).__init__(**kwargs)
+        # self.loss_fn = keras.losses.SparseCategoricalCrossentropy(
+        #     reduction=tf.keras.losses.Reduction.NONE
+        # )
+        # self.accr_tracker = tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")
+        self.reverse_token_map = reverse_token_map
 
     def train_step(self, inputs):
         if len(inputs) == 3:
@@ -16,6 +17,10 @@ class CustomMetricsModel(tf.keras.Model):
         else:
             x, y = inputs
             sample_weight = None
+
+
+        if "<PAD>" in self.reverse_token_map:
+            sample_weight = y != self.reverse_token_map["<PAD>"]
 
         with tf.GradientTape() as tape:
 

@@ -64,7 +64,8 @@ class WordLanguageModelEmbeddingsBuilder:
         out = Dense(self.n_a, activation='relu', kernel_regularizer=reg)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
         # model = keras.Model(inputs=x, outputs=out)
-        model = CustomMetricsModel(inputs=x, outputs=out)
+        reverse_token_map = {t: i for i, t in enumerate(vocab)}
+        model = CustomMetricsModel(reverse_token_map, inputs=x, outputs=out)
         # opt = RMSprop(learning_rate=self.learning_rate, clipvalue=3)
         # model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=["accuracy"])
         return model

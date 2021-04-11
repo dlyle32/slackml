@@ -46,13 +46,22 @@ class SlackTextLineDataset():
         # token_counts = self.ds.reduce({}, lambda state, x: tf.py_function(count_tokens,[state,x], tf.)
         # self.ds = tf.data.Dataset.from_tensor_slices([vect for seq in seqs for vect in self.tokens_to_sequences(seq)])
         self.ds = None
+        self.Xseqs = []
+        self.Yseqs = []
         for seq in self.tokens:
-            ds = self.tokens_to_sequences(seq)
-            if self.ds is None:
-                self.ds = ds
-            else:
-                self.ds = self.ds.concatenate(ds)
-        return self.ds
+            Xs, Ys = self.tokens_to_sequences(seq)
+            self.Xseqs.extend(Xs)
+            self.Yseqs.extend(Ys)
+        self.Xseqs = np.array(self.Xseqs)
+        self.Yseqs = np.array(self.Yseqs)
+        #     ds = self.tokens_to_sequences(seq)
+        #     if self.ds is None:
+        #         self.ds = ds
+        #     else:
+        #         self.ds = self.ds.concatenate(ds)
+        # print("SEQUENCES BUILT")
+        # return self.ds
+        # return selfXseqs, Yseqs
 
     def tokens_to_sequences(self, tokens):
         if len(tokens) < self.seqlen:
@@ -66,18 +75,18 @@ class SlackTextLineDataset():
             Xseq = [get_ix_from_token(self.reverse_token_map, x0)] + Yseq[:-1]
             Yseq = np.array(Yseq)
             Xseq = np.array(Xseq)
-            pad_mask = (Yseq != get_ix_from_token(self.reverse_token_map, "<PAD>")).astype(np.int64)
-            pad_masks.append(pad_mask)
+            # pad_mask = (Yseq != get_ix_from_token(self.reverse_token_map, "<PAD>")).astype(np.int64)
+            # pad_masks.append(pad_mask)
             Yseqs.append(Yseq)
             Xseqs.append(Xseq)
         # Yseqs = tf.data.Dataset.from_tensor_slices(Yseqs)
         # Xseqs = tf.data.Dataset.from_tensor_slices(Xseqs, Yseqs)
-        seqs = tf.data.Dataset.from_tensor_slices((Xseqs,Yseqs, pad_masks))
-        return seqs
+        # seqs = tf.data.Dataset.from_tensor_slices((Xseqs,Yseqs))
+        return Xseqs, Yseqs
         # return tf.data.Dataset.from_tensor_slices((Xseqs,Yseqs))
 
     def get_dataset(self):
-        return self.ds, self.vocab, self.tokens
+        return self.Xseqs, self.Yseqs, self.vocab, self.tokens
 
 
 
