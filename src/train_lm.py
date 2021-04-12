@@ -19,6 +19,7 @@ from models.kattn_lm import EinsumOp
 from callbacks.text_gen import TextGenerator
 from tensorflow.keras.utils import plot_model
 from datasets.slack_text_line_dataset import SlackTextLineDataset
+from datasets.sequence_vectors import SequenceVectors
 
 logger = logging.getLogger('keras_char_lm')
 
@@ -281,6 +282,16 @@ def main(args):
     if not args.textlineds:
         trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
         # trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
+
+        if args.modelbuilder == "keras_word_lm.WordLanguageModelBuilder":
+            trainvectors = SequenceVectors(args, trainseqs, vocab)
+            history = model.fit(trainvectors,
+                                epochs=args.numepochs,
+                                initial_epoch=init_epoch,
+                                callbacks=[sample_callback, logger_callback, checkpoint_callback])
+            logger.info(history.history)
+            plot_history(history.history, args.learningrate, logdir, timestamp)
+            return
         X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
 
 
@@ -353,7 +364,7 @@ def parse_args():
     parser.add_argument("--dropoutrate", type=float, default=0.2)
     parser.add_argument("--regfactor", type=float, default=0.01)
     parser.add_argument("--datacap", type=int, default=10000)
-    parser.add_argument("--freqthreshold", type=int, default=5)
+    parser.add_argument("--freqthreshold", type=int, default=0)
     parser.add_argument("--lenthreshold", type=int, default=20)
     parser.add_argument("--modelbuilder", type=str)
     parser.add_argument("--valsplit", type=float, default=0.2)

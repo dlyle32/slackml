@@ -28,7 +28,7 @@ class WordLanguageModelBuilder:
         self.seqlen = args.seqlength
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\,|\.|&gt|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
-        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        self.tokenizer = SlidingWindowTokenizer(args)
 
         # self.tokenizer = TFVectTokenizer(self.seqlen, self.step, args.freqthreshold)
 
@@ -54,11 +54,11 @@ class WordLanguageModelBuilder:
     def create_model(self, vocab):
         vocab_size = len(vocab)
         reg = regularizers.l2(self.reg_factor)
-        tf.keras.backend.set_floatx('float64')
+        # tf.keras.backend.set_floatx('float64')
         x = Input(shape=(self.seqlen, vocab_size), name="input")
         out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(x)
         out = Dropout(self.dropout_rate)(out)
-        out = LSTM(self.n_a, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
+        out = LSTM(self.n_a, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg)(out)
         out = Dropout(self.dropout_rate)(out)
         out = Dense(self.n_a, activation='relu', kernel_regularizer=reg)(out)
         out = Dense(vocab_size, activation='softmax', kernel_regularizer=reg)(out)
@@ -85,6 +85,7 @@ class WordLanguageModelBuilder:
             x = np.zeros((1, seqlen, vocab_size))
             x[0] = [token_to_oh(get_ix_from_token(reverse_token_map, token), vocab_size) for token in inpt]
             preds = model.predict(x, verbose=0)[0]
+            preds = preds[min(i, self.seqlen - 1)]
             token_ix = np.random.choice(range(vocab_size), p=preds.ravel())
             new_token = vocab[token_ix]
             output += new_token
