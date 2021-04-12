@@ -133,7 +133,22 @@ def configure_checkpointing(args, timestamp):
     checkpoint_name = "nodle_word_lm.%d.{epoch:03d}.h5" % timestamp
     return os.path.join(checkpoint_dir, checkpoint_name)
 
+def plot_metric(metric, metrics, lr, logdir, timestamp):
+    val_metric = "val_" + metric
+    plt.plot(np.squeeze(metrics[metric]), "b")
+    plt.plot(np.squeeze(metrics[val_metric]), "r")
+    plt.ylabel(metric)
+    plt.xlabel('iterations')
+    plt.title("Learning rate =" + str(lr))
+    lossfname = os.path.join(logdir, "model_%s_%d.png" % (metric,timestamp))
+    plt.savefig(lossfname)
+
 def plot_history(metrics, lr, logdir, timestamp):
+    for metric in metrics.keys():
+        if "val" in metric:
+            continue
+        plot_metric(metric, metrics, lr, logdir, timestamp)
+    return
     plt.plot(np.squeeze(metrics["loss"]),"b")
     plt.plot(np.squeeze(metrics["val_loss"]),"r")
     plt.ylabel('loss')
@@ -285,6 +300,7 @@ def main(args):
                         shuffle=True,
                         callbacks=[sample_callback, logger_callback, checkpoint_callback])
     logger.info(history.history)
+    plot_history(history.history, args.learningrate, logdir, timestamp)
     return
     allmetrics = {}
     for epoch in range(init_epoch, args.numepochs):
