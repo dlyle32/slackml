@@ -30,7 +30,7 @@ class WordLanguageModelEmbeddingsBuilder:
         self.seqlen = args.seqlength
         #self.tokenizer = nltk.RegexpTokenizer("\S+|\n+")
         # self.tokenizer = nltk.RegexpTokenizer("\,|\.|&gt|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
-        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        self.tokenizer = SlidingWindowTokenizer(args)
 
     def tokenize(self, data, freq_threshold=None):
         return self.tokenizer.tokenize(data)

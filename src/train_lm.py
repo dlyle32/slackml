@@ -207,9 +207,11 @@ def main(args):
 
     # Create or load existing model
     init_epoch = 0
-    # tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
-    X,Y, vocab, tokens = SlackTextLineDataset(args, train).get_dataset()
-    reverse_token_map = {t: i for i, t in enumerate(vocab)}
+    if args.textlineds:
+        X,Y, vocab, tokens = SlackTextLineDataset(args, train).get_dataset()
+        reverse_token_map = {t: i for i, t in enumerate(vocab)}
+    else:
+        tokens, vocab, reverse_token_map = modelBuilder.tokenize(train, freq_threshold=args.freqthreshold)
     # text_ds = text_ds.shuffle(buffer_size=1024).batch(args.minibatchsize)
     # print(text_ds.cardinality().numpy())
     if args.loadmodel and os.path.exists(args.loadmodel):
@@ -261,11 +263,12 @@ def main(args):
     sample_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: sample_func())
     logger_callback = LambdaCallback(on_epoch_end=lambda epoch, logs: logger.info("Epoch %d: %s" % (epoch, str(logs))))
 
-    # trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+    if not args.textlineds:
+        trainseqs = modelBuilder.get_input_sequences(tokens, reverse_token_map)
+        # trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
+        X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
 
-    # trainseqs, valseqs = validation_split(seqs, val_split=args.valsplit)
 
-    # X, Y, sample_weights = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
 
     # ds = modelBuilder.build_input_vectors(trainseqs, vocab, reverse_token_map)
     # model.fit(X, Y,
@@ -335,6 +338,7 @@ def parse_args():
     parser.add_argument("--regfactor", type=float, default=0.01)
     parser.add_argument("--datacap", type=int, default=10000)
     parser.add_argument("--freqthreshold", type=int, default=5)
+    parser.add_argument("--lenthreshold", type=int, default=20)
     parser.add_argument("--modelbuilder", type=str)
     parser.add_argument("--valsplit", type=float, default=0.2)
     parser.add_argument("--fillseqs", action="store_true")
@@ -347,6 +351,7 @@ def parse_args():
     parser.add_argument("--runsamples", action="store_true")
     parser.add_argument("--vocabfile", type=str)
     parser.add_argument("--modelweightspath", type=str)
+    parser.add_argument("--textlineds", action="store_true")
     return parser.parse_args()
 
 if __name__=="__main__":

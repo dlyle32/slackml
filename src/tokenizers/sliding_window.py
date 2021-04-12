@@ -3,11 +3,12 @@ from models.helpers import get_ix_from_token, token_to_oh, oh_to_token, char_pad
 import re
 
 class SlidingWindowTokenizer:
-    def __init__(self, seqlen, step, freq_threshold):
-        self.freq_threshold=freq_threshold
+    def __init__(self, args):
+        self.freq_threshold=args.freqthreshold
+        self.len_threshold=args.lenthreshold
         self.freq_threshold=0
-        self.seqlen = seqlen
-        self.step = step
+        self.seqlen = args.seqlength
+        self.step = args.step
         self.tokenizer = nltk.RegexpTokenizer("\<START\>|\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
 
         # self._re_word_start = r"[^\(\"\`{\[:;&\#\*@\)}\]\-,]"
@@ -69,7 +70,14 @@ class SlidingWindowTokenizer:
 
     def tokenize(self, data):
         # tokens = self.tokenizer.tokenize("<START> ".join(data))
-        tokens = self.word_tokenize(" <START> ".join(data))
+        # tokens = self.word_tokenize(" <START> ".join(data))
+        tokens = []
+        for msg in data:
+            msg_tokens = self.word_tokenize(msg)
+            if len(msg_tokens) < self.len_threshold:
+                continue
+            tokens.extend(msg_tokens)
+
         token_counts = {}
         for t in tokens:
             if t not in token_counts.keys():

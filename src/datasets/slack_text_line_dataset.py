@@ -20,9 +20,10 @@ def hoops_in(s):
 class SlackTextLineDataset():
     def __init__(self, args, data):
         self.freq_threshold=args.freqthreshold
+        self.len_threshold=args.lenthreshold
         self.step = args.step
         self.seqlen = args.seqlength
-        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, self.freq_threshold)
+        self.tokenizer = SlidingWindowTokenizer(args)
         # datadir = os.path.join(args.volumedir, args.datadir)
         # file_pattern = datadir + "*.csv"
         # files = tf.data.Dataset.list_files(file_pattern)
@@ -34,6 +35,8 @@ class SlackTextLineDataset():
         self.tokens = []
         for msg in data:
             tokens = self.tokenizer.word_tokenize(msg)
+            if len(tokens) < self.len_threshold:
+                continue
             token_counts = count_tokens(token_counts, tokens)
             self.tokens.append(tokens)
 

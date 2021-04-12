@@ -136,7 +136,7 @@ class AttentionModelBuilder:
         self.transformer_layers = args.transformer_layers
         self.attention_heads = args.attention_heads
 
-        self.tokenizer = SlidingWindowTokenizer(self.seqlen, self.step, args.freqthreshold)
+        self.tokenizer = SlidingWindowTokenizer(args)
         # self.tokenizer = TFVectTokenizer(self.seqlen, self.step, args.freqthreshold)
 
     def tokenize(self, data, freq_threshold=None):
@@ -281,7 +281,8 @@ class AttentionModelBuilder:
         # return masked_model
 
         # model = keras.Model(inputs=inpt, outputs=out)
-        model = CustomMetricsModel(inputs=inpt, outputs=out)
+        reverse_token_map = {t:i for i,t in enumerate(vocab)}
+        model = CustomMetricsModel(reverse_token_map, inputs=inpt, outputs=out)
         return model
 
     def logtop5(self,p, vocab):
