@@ -6,7 +6,7 @@ class SlidingWindowTokenizer:
     def __init__(self, args):
         self.freq_threshold=args.freqthreshold
         self.len_threshold=args.lenthreshold
-        self.freq_threshold=0
+        # self.freq_threshold=0
         self.seqlen = args.seqlength
         self.step = args.step
         self.tokenizer = nltk.RegexpTokenizer("\<START\>|\,|\.|\¯\\\_\(\ツ\)\_\/\¯|\<\@\w+\>|\:\w+\:|\/gif|_|\"| |\w+\'\w+|\w+|\n")
@@ -76,6 +76,7 @@ class SlidingWindowTokenizer:
             msg_tokens = self.word_tokenize(msg)
             if len(msg_tokens) < self.len_threshold:
                 continue
+            tokens.append("<START>")
             tokens.extend(msg_tokens)
 
         token_counts = {}
