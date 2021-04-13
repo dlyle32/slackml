@@ -91,13 +91,22 @@ class SlidingWindowTokenizer:
         reverse_token_map = {t: i for i, t in enumerate(vocab)}
         return tokens, vocab, reverse_token_map
 
+    def slice_padded_sequence(self, tokens, start):
+        end = min(start+self.seqlen, len(tokens) - 1)
+        padded_sequence = char_padded(tokens[start:end], " ", self.seqlen)
+        return padded_sequence
+
     def get_input_sequences(self, tokens, reverse_token_map):
         seqs = []
         for i in range(0, len(tokens) - self.seqlen, self.step):
-            x0 = "<START>" if i == 0 else tokens[i - 1]
-            last_ix = min(i + self.seqlen, len(tokens) - 1)
-            padded_sequence = char_padded(tokens[i:last_ix], " ", self.seqlen)
-            Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
-            Xseq = [get_ix_from_token(reverse_token_map, x0)] + Yseq[:-1]
+            # x0 = "<START>" if i == 0 else tokens[i - 1]
+            # last_ix = min(i + self.seqlen, len(tokens) - 1)
+            # padded_sequence = char_padded(tokens[i:last_ix], " ", self.seqlen)
+            X = self.slice_padded_sequence(tokens, i)
+            Y = self.slice_padded_sequence(tokens, i+1)
+            Xseq = [get_ix_from_token(reverse_token_map, token) for token in X]
+            Yseq = [get_ix_from_token(reverse_token_map, token) for token in Y]
+            # Yseq = [get_ix_from_token(reverse_token_map, token) for token in padded_sequence]
+            # Xseq = [get_ix_from_token(reverse_token_map, x0)] + Yseq[:-1]
             seqs.append((Xseq, Yseq))
         return seqs
