@@ -143,6 +143,7 @@ def plot_metric(metric, metrics, lr, logdir, timestamp):
     plt.title("Learning rate =" + str(lr))
     lossfname = os.path.join(logdir, "model_%s_%d.png" % (metric,timestamp))
     plt.savefig(lossfname)
+    plt.clf()
 
 def plot_history(metrics, lr, logdir, timestamp):
     for metric in metrics.keys():
@@ -196,6 +197,10 @@ def main(args):
     # train, test = load_context_target_pairs(datadir, context_len = args.conlength)
     # train = sorted(train, key=lambda a: len(a), reverse=True)
     # train = train[:min(len(train), args.datacap)]
+    # for msg in train:
+    #     if "roster" in msg:
+    #         print(msg)
+    # return
 
     # Dynamically load modelBuilder class
     moduleName, klassName = args.modelbuilder.split(".")
